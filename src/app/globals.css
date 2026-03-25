@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+:root {
+  /* TED Branding & Modern Dark Palette */
+  --ted-red: #E62B1E;
+  --ted-red-glow: rgba(230, 43, 30, 0.4);
+  --bg-deep: #0A0A0B;
+  --bg-surface: #121214;
+  --text-primary: #FFFFFF;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-blur: blur(20px) saturate(200%);
+}
+
+@theme inline {
+  --color-background: var(--bg-deep);
+  --color-foreground: var(--text-primary);
+  --color-ted-red: var(--ted-red);
+  --color-glass-panel: var(--glass-bg);
+}
+
+body {
+  background-color: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  background-image: 
+    radial-gradient(circle at 0% 0%, rgba(230, 43, 30, 0.05) 0%, transparent 40%),
+    radial-gradient(circle at 100% 0%, rgba(124, 58, 237, 0.05) 0%, transparent 40%);
+}
+
+/* Glassmorphism Utility Classes */
+.glass-effect {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+}
+
+.hover-glow:hover {
+  box-shadow: 0 0 20px var(--ted-red-glow);
+  transform: translateY(-2px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+::selection {
+  background-color: var(--ted-red);
+  color: white;
+}

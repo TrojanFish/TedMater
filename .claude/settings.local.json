@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find E:ToDoList -type f -name *.env*)",
+      "Bash(npm run:*)"
+    ]
+  }
+}

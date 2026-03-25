@@ -1,0 +1,69 @@
+# 🎙️ TEDMaster (TED 精读大师) - 项目启动蓝图
+
+> [!NOTE]
+> 我们正在为你初始化一个全新的项目框架：**TEDMaster**。
+> 这是一个旨在将“被动观看”转化为“深度习得”的 AI 英语学习平台。
+
+## 1. 核心愿景与设计理念
+
+我们不仅是在做一个视频播放器，而是在构建一个**全自动化的精读工坊**。
+利用 **Gemini 1.5 Pro** 的长上下文能力和文法分析能力，我们将 TED 演讲转化为可深度交互的学习素材。
+
+````carousel
+![TEDMaster 项目视觉预览](/C:/Users/KeiyeeYu/.gemini/antigravity\brain\b0e67bc6-177e-41bb-8c2b-60491b813208\tedmaster_dashboard_mockup_1774235876411.png)
+<!-- slide -->
+### 🎨 视觉语言：Glassmorphism & TED Red
+- **沉浸感**：深色模式结合玻璃化毛玻璃卡片设计。
+- **品牌感**：核心交互元件点缀 TED 官方品牌红 `#E62B1E`。
+- **动态反馈**：所有按钮与弹出面板具备 Q 弹交互（Bouncy interactions）。
+````
+
+## 2. 深度功能路线图
+
+### 阶段 1: 智能解析引擎 (AI Extraction)
+- **爬虫服务**：自动抓取 TED 演讲的 `.vtt` 字幕与 MP4 音频流。
+- **字幕对齐**：通过 AI 将原始演讲句子进行精准的时间戳切分与中英对齐。
+
+### 阶段 2: 沉浸式精读工作流 (Immersion Workflow)
+- **交互式字幕**：
+    - **词汇悬浮窗 (Pop-over Dictionary)**：点击即显示基于 AI 的上下文释义。
+    - **长难句拆解**：点击“解析”图标，AI 立即生成句法树视图。
+- **影子训练 (Shadowing)**：录入用户语音，并与原声进行基波频率 (Pitch) 与能量 (Energy) 对比。
+
+### 阶段 3: 学习闭环 (Learning Loop)
+- **AI 热力词频**：识别演讲中的高频核心词。
+- **Anki 级生词本**：自动将精读收藏的词汇同步至用户的长期记忆库。
+
+---
+
+## 3. 初始项目目录结构 (Folder Structure)
+
+我们将采用 **Next.js 14 (App Router)** 架构，以便于 SEO 处理与服务器端组件的高效运行：
+
+```text
+/E:/TEDMaster
+├── /app                # Next.js 核心路由
+│   ├── /library        # 演讲列表页
+│   ├── /player         # 沉浸式播放器核心页
+│   └── /vocabulary     # 生成词本管理
+├── /components         # UI 组件库 (GlassCard, BouncyButton, AI_Dashboard)
+├── /services           # 逻辑层
+│   ├── /ai             # Gemini API 接口封装 (语法分析/摘要/翻译)
+│   ├── /crawler        # TED 自动化抓取脚本
+│   └── /dictionary     # 词典接口集成 (Cambridge/Oxford API 或 AI)
+├── /styles             # 全局设计 Token (CSS Variables)
+├── PROJECT_FRAMEWORK.md # 总体规划
+└── README.md           # 项目自述
+```
+
+---
+
+## 4. 即刻行动指南 (Action Items)
+
+1. [x] **创建框架文档**：已生成 [PROJECT_FRAMEWORK.md](file:///e:/ToDoList/PROJECT_FRAMEWORK.md) 与 [README.md](file:///E:/EchoCast/README.md)。
+2. [ ] **环境配置**：准备好 `GEMINI_API_KEY` 以开启 AI 解析功能。
+3. [ ] **核心原型**：我们接下来可以先写一个 TED 抓取脚本，并初始化前端界面。
+
+---
+
+**你想现在就开始初始化 Next.js 框架，还是先深入打磨其中的某个核心功能（比如爬虫解析逻辑）？**
