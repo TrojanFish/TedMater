@@ -1,145 +1,221 @@
 "use client";
 
-import { PlayCircle, ShieldCheck, Zap, Sparkles, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Loader2, Search, Zap, Mic, BookOpen, Sun, Moon, ChevronDown } from "lucide-react";
+
+const GithubIcon = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58v-2.23c-3.34.73-4.03-1.42-4.03-1.42-.55-1.39-1.34-1.76-1.34-1.76-1.09-.74.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.49 1 .11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6.01 0c2.28-1.55 3.29-1.23 3.29-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.82 1.1.82 2.22v3.29c0 .32.19.69.8.58C20.56 21.8 24 17.3 24 12c0-6.63-5.37-12-12-12z"/>
+  </svg>
+);
+import { useApp, LANGS } from "@/lib/i18n";
 
 export default function Home() {
+  const { t, theme, toggleTheme, lang, setLang } = useApp();
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<any>(null);
+  const [result, setResult] = useState<{ title: string; presenter: string; description: string } | null>(null);
   const [error, setError] = useState("");
+  const [showLangMenu, setShowLangMenu] = useState(false);
   const router = useRouter();
 
   const handleAnalyze = async () => {
-    if (!url) return;
-    setLoading(true);
-    setError("");
-    setData(null);
-
+    const trimmed = url.trim();
+    if (!trimmed) return;
+    setLoading(true); setError(""); setResult(null);
     try {
-      const response = await fetch("/api/parse", {
+      const res = await fetch("/api/parse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url: trimmed }),
       });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || "Failed to analyze URL");
-      }
-
-      setData(result);
-    } catch (err: any) {
-      setError(err.message);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to analyze URL");
+      setResult(data);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
       setLoading(false);
     }
   };
 
+  const features = [
+    { icon: <Zap size={22} />, title: t.f1Title, desc: t.f1Desc },
+    { icon: <Mic size={22} />, title: t.f2Title, desc: t.f2Desc },
+    { icon: <BookOpen size={22} />, title: t.f3Title, desc: t.f3Desc },
+  ];
+
+  const currentLang = LANGS.find(l => l.value === lang);
+
   return (
-    <main className="relative min-h-screen flex flex-col items-center justify-center p-6 overflow-hidden">
-      {/* Decorative Glows */}
-      <div className="absolute top-1/4 -left-20 w-80 h-80 bg-ted-red/10 rounded-full blur-[120px]" />
-      <div className="absolute bottom-1/4 -right-20 w-80 h-80 bg-purple-600/10 rounded-full blur-[120px]" />
+    <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
 
-      <div className="z-10 w-full max-w-4xl flex flex-col items-center gap-12 text-center">
-        {/* Logo / Badge */}
-        <div className="flex items-center gap-2 px-4 py-2 glass-effect rounded-full text-sm font-medium animate-fade-in text-white/80">
-          <Sparkles className="w-4 h-4 text-ted-red" />
-          <span>AI-Powered Intensive Reading</span>
+      {/* ── Header ─────────────────────────────────────────────── */}
+      <header className="h-14 flex items-center justify-between px-6 border-b" style={{ borderColor: "var(--border)", background: "var(--bg-2)" }}>
+        <div className="flex items-center gap-2">
+          <span className="font-black text-lg tracking-tight">
+            TED<span style={{ color: "var(--accent)" }}>Master</span>
+          </span>
         </div>
+        <div className="flex items-center gap-1">
+          {/* GitHub */}
+          <a
+            href="https://github.com/TrojanFish/TedMater"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-2 rounded-lg transition-colors"
+            style={{ color: "var(--text-2)" }}
+            onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
+            onMouseLeave={e => (e.currentTarget.style.color = "var(--text-2)")}
+            title={t.github}
+          >
+            <GithubIcon />
+          </a>
 
-        {/* Hero Title */}
-        <div className="space-y-4">
-          <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-white">
-            TED<span className="text-ted-red">Master</span>
+          {/* Theme toggle */}
+          <button
+            onClick={toggleTheme}
+            className="p-2 rounded-lg transition-colors"
+            style={{ color: "var(--text-2)" }}
+            onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
+            onMouseLeave={e => (e.currentTarget.style.color = "var(--text-2)")}
+          >
+            {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+
+          {/* Language selector */}
+          <div className="relative">
+            <button
+              onClick={() => setShowLangMenu(v => !v)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+              style={{ color: "var(--text-2)", border: "1px solid var(--border)" }}
+              onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
+              onMouseLeave={e => (e.currentTarget.style.color = "var(--text-2)")}
+            >
+              {currentLang?.short}
+              <ChevronDown size={13} />
+            </button>
+            {showLangMenu && (
+              <div
+                className="absolute right-0 mt-1 rounded-xl overflow-hidden shadow-lg z-50 py-1 min-w-[140px]"
+                style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}
+              >
+                {LANGS.map(l => (
+                  <button
+                    key={l.value}
+                    onClick={() => { setLang(l.value); setShowLangMenu(false); }}
+                    className="w-full px-4 py-2 text-sm text-left transition-colors"
+                    style={{
+                      color: lang === l.value ? "var(--accent)" : "var(--text)",
+                      background: lang === l.value ? "var(--accent-s)" : "transparent",
+                      fontWeight: lang === l.value ? 600 : 400,
+                    }}
+                    onMouseEnter={e => { if (lang !== l.value) e.currentTarget.style.background = "var(--bg-3)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = lang === l.value ? "var(--accent-s)" : "transparent"; }}
+                  >
+                    {l.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* ── Hero ───────────────────────────────────────────────── */}
+      <main className="flex-1 flex flex-col items-center justify-center px-6 py-16 gap-12">
+        <div className="w-full max-w-2xl flex flex-col items-center gap-6 text-center">
+
+          {/* Badge */}
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold" style={{ background: "var(--accent-s)", color: "var(--accent)" }}>
+            <Zap size={11} />
+            {t.tagline}
+          </div>
+
+          {/* Title */}
+          <h1 className="text-5xl md:text-6xl font-black tracking-tight leading-tight">
+            {t.hero.replace("TED", "TED").split("TED").map((part, i, arr) =>
+              i < arr.length - 1 ? (
+                <span key={i}>{part}<span style={{ color: "var(--accent)" }}>TED</span></span>
+              ) : part
+            )}
           </h1>
-          <p className="text-lg md:text-xl text-white/60 max-w-2xl mx-auto leading-relaxed">
-            Turn visual mastery into language acquisition. Deep dive into the world's greatest ideas with AI syntax analysis and real-time shadowing.
-          </p>
-        </div>
 
-        {/* URL Input Area */}
-        <div className="w-full max-w-2xl flex flex-col gap-4">
-          <div className="glass-effect p-2 rounded-[2rem] flex items-center gap-2 group hover-glow transition-all duration-300">
-            <div className="pl-6 text-white/40">
-              <PlayCircle className="w-6 h-6" />
+          <p className="text-base max-w-xl leading-relaxed" style={{ color: "var(--text-2)" }}>
+            {t.heroSub}
+          </p>
+
+          {/* URL input */}
+          <div className="w-full flex gap-2">
+            <div className="flex-1 flex items-center gap-3 px-4 rounded-xl border transition-colors"
+              style={{ background: "var(--bg-2)", borderColor: "var(--border)" }}>
+              <Search size={16} style={{ color: "var(--text-3)", flexShrink: 0 }} />
+              <input
+                type="text"
+                value={url}
+                onChange={e => setUrl(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleAnalyze()}
+                placeholder={t.placeholder}
+                disabled={loading}
+                className="flex-1 bg-transparent border-none outline-none py-3 text-sm"
+                style={{ color: "var(--text)" }}
+              />
             </div>
-            <input
-              type="text"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="Paste a TED Talk URL to start learning..."
-              className="flex-1 bg-transparent border-none outline-none py-4 px-2 text-lg text-white placeholder:text-white/30"
-              disabled={loading}
-              onKeyDown={(e) => e.key === "Enter" && handleAnalyze()}
-            />
             <button
               onClick={handleAnalyze}
-              disabled={loading || !url}
-              className="bg-ted-red hover:bg-white hover:text-ted-red text-white disabled:opacity-50 disabled:hover:bg-ted-red disabled:hover:text-white font-bold py-3 px-8 rounded-[1.5rem] transition-all duration-300"
+              disabled={loading || !url.trim()}
+              className="px-6 py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-40"
+              style={{ background: "var(--accent)" }}
+              onMouseEnter={e => !loading && url.trim() && (e.currentTarget.style.background = "var(--accent-h)")}
+              onMouseLeave={e => (e.currentTarget.style.background = "var(--accent)")}
             >
-              {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : "Analyze"}
+              {loading ? <Loader2 size={16} className="animate-spin" /> : t.analyze}
             </button>
           </div>
-          {error && <p className="text-ted-red text-sm font-medium px-6 text-left">{error}</p>}
+
+          {error && (
+            <p className="text-sm font-medium" style={{ color: "var(--accent)" }}>{error}</p>
+          )}
+
+          {/* Result card */}
+          {result && (
+            <div className="w-full rounded-xl p-5 text-left border-l-4 card"
+              style={{ borderLeftColor: "var(--accent)" }}>
+              <p className="text-base font-bold leading-snug">{result.title}</p>
+              <p className="text-sm mt-0.5 mb-3" style={{ color: "var(--accent)" }}>{t.by} {result.presenter}</p>
+              <p className="text-sm leading-relaxed line-clamp-2 mb-4" style={{ color: "var(--text-2)" }}>{result.description}</p>
+              <button
+                onClick={() => router.push(`/watch?url=${encodeURIComponent(url.trim())}`)}
+                className="w-full py-2.5 rounded-lg text-sm font-bold text-white transition-all"
+                style={{ background: "var(--accent)" }}
+                onMouseEnter={e => (e.currentTarget.style.background = "var(--accent-h)")}
+                onMouseLeave={e => (e.currentTarget.style.background = "var(--accent)")}
+              >
+                {t.startLearning}
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Analysis Preview Card */}
-        {data && (
-          <div className="w-full max-w-2xl glass-effect p-6 rounded-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 text-left border-l-4 border-l-ted-red">
-            <h2 className="text-2xl font-bold text-white mb-2">{data.title}</h2>
-            <p className="text-ted-red font-medium text-sm mb-4">by {data.presenter}</p>
-            <p className="text-white/60 text-sm line-clamp-3 mb-6">{data.description}</p>
-            <button 
-              onClick={() => router.push(`/watch?url=${encodeURIComponent(url)}`)}
-              className="w-full bg-ted-red hover:bg-white hover:text-ted-red text-white font-bold py-3 rounded-xl transition-all"
-            >
-              Go to Player →
-            </button>
-          </div>
-        )}
-
-        {/* Features Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full pt-8">
-          <div className="glass-effect p-8 rounded-3xl space-y-4 text-left group hover:bg-white/5 transition-all">
-            <div className="w-12 h-12 rounded-2xl bg-ted-red/20 flex items-center justify-center">
-              <Zap className="w-6 h-6 text-ted-red" />
+        {/* ── Features ─────────────────────────────────────────── */}
+        <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-3 gap-4">
+          {features.map((f, i) => (
+            <div key={i} className="card p-6 flex flex-col gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: "var(--accent-s)", color: "var(--accent)" }}>
+                {f.icon}
+              </div>
+              <h3 className="font-bold text-base">{f.title}</h3>
+              <p className="text-sm leading-relaxed" style={{ color: "var(--text-2)" }}>{f.desc}</p>
             </div>
-            <h3 className="text-xl font-semibold text-white">Syntax Vision</h3>
-            <p className="text-white/50 text-sm leading-relaxed">
-              AI-driven grammar breakdown for complex sentences. Understand every clause instantly.
-            </p>
-          </div>
-
-          <div className="glass-effect p-8 rounded-3xl space-y-4 text-left group hover:bg-white/5 transition-all">
-            <div className="w-12 h-12 rounded-2xl bg-purple-500/20 flex items-center justify-center">
-              <Sparkles className="w-6 h-6 text-purple-400" />
-            </div>
-            <h3 className="text-xl font-semibold text-white">Shadow Scoring</h3>
-            <p className="text-white/50 text-sm leading-relaxed">
-              Real-time voice analysis and waveform comparison to perfect your rhythm and intonation.
-            </p>
-          </div>
-
-          <div className="glass-effect p-8 rounded-3xl space-y-4 text-left group hover:bg-white/5 transition-all">
-            <div className="w-12 h-12 rounded-2xl bg-blue-500/20 flex items-center justify-center">
-              <ShieldCheck className="w-6 h-6 text-blue-400" />
-            </div>
-            <h3 className="text-xl font-semibold text-white">Ethical & Free</h3>
-            <p className="text-white/50 text-sm leading-relaxed">
-              Built for learners. Open source, non-commercial, and respects creators' rights.
-            </p>
-          </div>
+          ))}
         </div>
-      </div>
+      </main>
 
-      {/* Footer */}
-      <footer className="mt-20 text-white/30 text-sm py-4">
-        Made with ❤️ for English Learners • Non-commercial Project
+      {/* ── Footer ─────────────────────────────────────────────── */}
+      <footer className="py-4 text-center text-xs border-t" style={{ color: "var(--text-3)", borderColor: "var(--border)" }}>
+        {t.footer}
       </footer>
-    </main>
+    </div>
   );
 }

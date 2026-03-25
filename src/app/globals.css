@@ -1,51 +1,84 @@
 @import "tailwindcss";
 
-:root {
-  /* TED Branding & Modern Dark Palette */
-  --ted-red: #E62B1E;
-  --ted-red-glow: rgba(230, 43, 30, 0.4);
-  --bg-deep: #0A0A0B;
-  --bg-surface: #121214;
-  --text-primary: #FFFFFF;
-  --text-secondary: rgba(255, 255, 255, 0.7);
-  --glass-bg: rgba(255, 255, 255, 0.05);
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --glass-blur: blur(20px) saturate(200%);
+/* ── Theme Variables ──────────────────────────────────────────── */
+:root,
+[data-theme="dark"] {
+  --bg:      #111113;
+  --bg-2:    #1c1c1f;
+  --bg-3:    #27272b;
+  --text:    #ebebec;
+  --text-2:  #88888f;
+  --text-3:  #4a4a52;
+  --border:  #2e2e35;
+  --accent:  #E62B1E;
+  --accent-h:#ff3322;
+  --accent-s: rgba(230, 43, 30, 0.12);
+  --shadow:  rgba(0,0,0,0.5);
+}
+
+[data-theme="light"] {
+  --bg:      #f4f4f6;
+  --bg-2:    #ffffff;
+  --bg-3:    #eaeaed;
+  --text:    #111113;
+  --text-2:  #666670;
+  --text-3:  #9999a3;
+  --border:  #dddde2;
+  --accent:  #E62B1E;
+  --accent-h:#c41f14;
+  --accent-s: rgba(230, 43, 30, 0.08);
+  --shadow:  rgba(0,0,0,0.12);
 }
 
 @theme inline {
-  --color-background: var(--bg-deep);
-  --color-foreground: var(--text-primary);
-  --color-ted-red: var(--ted-red);
-  --color-glass-panel: var(--glass-bg);
+  --color-accent: var(--accent);
 }
+
+/* ── Base ─────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { height: 100%; }
 
 body {
-  background-color: var(--bg-deep);
-  color: var(--text-primary);
+  background-color: var(--bg);
+  color: var(--text);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  min-height: 100vh;
   -webkit-font-smoothing: antialiased;
-  background-image: 
-    radial-gradient(circle at 0% 0%, rgba(230, 43, 30, 0.05) 0%, transparent 40%),
-    radial-gradient(circle at 100% 0%, rgba(124, 58, 237, 0.05) 0%, transparent 40%);
+  min-height: 100%;
 }
 
-/* Glassmorphism Utility Classes */
-.glass-effect {
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
+::selection { background-color: var(--accent); color: #fff; }
+
+/* ── Scrollbar ────────────────────────────────────────────────── */
+.custom-scrollbar { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+
+/* ── Reusable card ────────────────────────────────────────────── */
+.card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
 }
 
-.hover-glow:hover {
-  box-shadow: 0 0 20px var(--ted-red-glow);
-  transform: translateY(-2px);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
+/* ── Range input ─────────────────────────────────────────────── */
+input[type="range"] { accent-color: var(--accent); cursor: pointer; }
 
-::selection {
-  background-color: var(--ted-red);
-  color: white;
+/* ── Print ────────────────────────────────────────────────────── */
+@media print {
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
+    background: white !important;
+    color: black !important;
+  }
+  body > div, #__next > div {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .print-hidden { display: none !important; }
+  #print-view   { display: block !important; }
+  @page { margin: 15mm 20mm; size: A4; }
 }

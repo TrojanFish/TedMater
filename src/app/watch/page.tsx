@@ -4,10 +4,18 @@ import { useEffect, useState, useRef, useCallback, useMemo, Suspense } from "rea
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   ChevronLeft, Play, Pause, Volume2, Settings, Loader2, Sparkles, X,
-  PlayCircle, Mic, FastForward, BookMarked, Sliders, Download, FileText, Video, FileCode, Check
+  PlayCircle, Mic, FastForward, BookMarked, Sliders, Download,
+  FileText, Video, FileCode, Check, Sun, Moon, ChevronDown,
 } from "lucide-react";
+
+const GithubIcon = () => (
+  <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor">
+    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58v-2.23c-3.34.73-4.03-1.42-4.03-1.42-.55-1.39-1.34-1.76-1.34-1.76-1.09-.74.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.49 1 .11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6.01 0c2.28-1.55 3.29-1.23 3.29-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.82 1.1.82 2.22v3.29c0 .32.19.69.8.58C20.56 21.8 24 17.3 24 12c0-6.63-5.37-12-12-12z"/>
+  </svg>
+);
 import Hls from "hls.js";
 import VocabBook, { VocabItem } from "@/components/VocabBook";
+import { useApp, LANGS } from "@/lib/i18n";
 
 interface TranscriptItem {
   id: number;
@@ -17,151 +25,183 @@ interface TranscriptItem {
 }
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
-const COLORS = [
-  { name: "Pure White", value: "#ffffff" },
-  { name: "TED Red", value: "#ff2b1e" },
-  { name: "Golden", value: "#ffd700" },
-  { name: "Neon Cyan", value: "#00f3ff" },
-  { name: "Soft Gray", value: "#a1a1aa" }
-];
-const FONTS = [
-  { name: "Modern Sans", value: "var(--font-geist-sans)" },
-  { name: "Elegant Serif", value: "serif" },
-  { name: "Classic Mono", value: "monospace" }
-];
 
+/* ── Shared header controls (GitHub / Theme / Lang) ───────────── */
+function HeaderControls() {
+  const { t, theme, toggleTheme, lang, setLang } = useApp();
+  const [showLang, setShowLang] = useState(false);
+  const currentLang = LANGS.find(l => l.value === lang);
+  return (
+    <div className="flex items-center gap-1">
+      <a href="https://github.com/TrojanFish/TedMater" target="_blank" rel="noopener noreferrer"
+        className="p-2 rounded-lg transition-colors" style={{ color: "var(--text-2)" }}
+        onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
+        onMouseLeave={e => (e.currentTarget.style.color = "var(--text-2)")} title={t.github}>
+        <GithubIcon />
+      </a>
+      <button onClick={toggleTheme} className="p-2 rounded-lg transition-colors"
+        style={{ color: "var(--text-2)" }}
+        onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
+        onMouseLeave={e => (e.currentTarget.style.color = "var(--text-2)")}>
+        {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
+      </button>
+      <div className="relative">
+        <button onClick={() => setShowLang(v => !v)}
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium"
+          style={{ color: "var(--text-2)", border: "1px solid var(--border)" }}>
+          {currentLang?.short}<ChevronDown size={11} />
+        </button>
+        {showLang && (
+          <div className="absolute right-0 mt-1 rounded-xl overflow-hidden shadow-xl z-[200] py-1 min-w-[140px]"
+            style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}>
+            {LANGS.map(l => (
+              <button key={l.value} onClick={() => { setLang(l.value); setShowLang(false); }}
+                className="w-full px-4 py-2 text-sm text-left transition-colors"
+                style={{ color: lang === l.value ? "var(--accent)" : "var(--text)", background: lang === l.value ? "var(--accent-s)" : "transparent", fontWeight: lang === l.value ? 600 : 400 }}
+                onMouseEnter={e => { if (lang !== l.value) e.currentTarget.style.background = "var(--bg-3)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = lang === l.value ? "var(--accent-s)" : "transparent"; }}>
+                {l.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── Main watch component ─────────────────────────────────────── */
 function WatchContent() {
+  const { lang, t } = useApp();
   const searchParams = useSearchParams();
   const router = useRouter();
   const videoUrlParam = searchParams.get("url");
-  
-  const [data, setData] = useState<any>(null);
+
+  const [data, setData] = useState<{ title: string; presenter: string; videoUrl: string; downloadUrl: string; isHls: boolean; transcript: TranscriptItem[] } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [currentTime, setCurrentTime] = useState(0); 
-  const [duration, setDuration] = useState(0);      
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasInteracted, setHasInteracted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
-  
-  // Customization
-  const [mainFontSize, setMainFontSize] = useState(20);
-  const [subFontSize, setSubFontSize] = useState(14);
-  const [mainColor, setMainColor] = useState("#ffffff");
-  const [subColor, setSubColor] = useState("rgba(255,255,255,0.4)");
-  const [fontFamily, setFontFamily] = useState("var(--font-geist-sans)");
+
+  // Display settings
+  const [mainFontSize, setMainFontSize] = useState(18);
+  const [subFontSize, setSubFontSize] = useState(13);
   const [subtitleOffset, setSubtitleOffset] = useState(0);
 
-  // AI & States
-  const [activeWord, setActiveWord] = useState<any>(null);
+  // AI
+  const [activeWord, setActiveWord] = useState<VocabItem & { loading?: boolean } | null>(null);
   const [wordLoading, setWordLoading] = useState(false);
-  const [analysisData, setAnalysisData] = useState<{ [key: number]: any }>({});
+  const [analysisData, setAnalysisData] = useState<Record<number, { structureZh: string; breakdown: { label: string; content: string; explanation: string }[]; insights: { title: string; content: string }[] }>>({});
   const [analysisLoading, setAnalysisLoading] = useState<number | null>(null);
   const [vocabWords, setVocabWords] = useState<VocabItem[]>([]);
   const [showVocab, setShowVocab] = useState(false);
 
   // Recording
   const [recordingId, setRecordingId] = useState<number | null>(null);
-  const [audioUrls, setAudioUrls] = useState<{ [key: number]: string }>({});
+  const [audioUrls, setAudioUrls] = useState<Record<number, string>>({});
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const transcriptRef = useRef<HTMLDivElement>(null);
   const activeParagraphRef = useRef<HTMLDivElement>(null);
+  const [lastActiveIndex, setLastActiveIndex] = useState(-1);
 
-  const [lastActiveIndex, setLastActiveIndex] = useState<number>(-1);
-
-  // High Precision Sync — only loop when playing
+  /* ── RAF sync ──────────────────────────────────────────────── */
   useEffect(() => {
     if (!isPlaying) return;
     let rafId: number;
     const update = () => {
-      if (videoRef.current) {
-        setCurrentTime((videoRef.current.currentTime * 1000) + subtitleOffset);
-      }
+      if (videoRef.current) setCurrentTime(videoRef.current.currentTime * 1000 + subtitleOffset);
       rafId = requestAnimationFrame(update);
     };
     rafId = requestAnimationFrame(update);
     return () => cancelAnimationFrame(rafId);
   }, [isPlaying, subtitleOffset]);
 
-  // Hotkeys
+  /* ── Hotkeys ───────────────────────────────────────────────── */
   useEffect(() => {
     const handleKeys = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setActiveWord(null); setShowExportMenu(false); setShowSettings(false); return; }
+      if (e.key === "Escape") { setActiveWord(null); setShowExportMenu(false); setShowSettings(false); return; }
       if (activeWord || analysisLoading !== null) return;
-      if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
-      if (e.code === 'ArrowLeft') { e.preventDefault(); if(videoRef.current) videoRef.current.currentTime -= 5; }
-      if (e.code === 'ArrowRight') { e.preventDefault(); if(videoRef.current) videoRef.current.currentTime += 5; }
-      if (e.key === 'v' || e.key === 'V') setShowVocab(prev => !prev);
+      if (e.code === "Space") { e.preventDefault(); togglePlay(); }
+      if (e.code === "ArrowLeft") { e.preventDefault(); if (videoRef.current) videoRef.current.currentTime -= 5; }
+      if (e.code === "ArrowRight") { e.preventDefault(); if (videoRef.current) videoRef.current.currentTime += 5; }
+      if (e.key === "v" || e.key === "V") setShowVocab(v => !v);
     };
-    window.addEventListener('keydown', handleKeys);
-    return () => window.removeEventListener('keydown', handleKeys);
+    window.addEventListener("keydown", handleKeys);
+    return () => window.removeEventListener("keydown", handleKeys);
   }, [activeWord, analysisLoading]);
 
-  // Initial Fetch
+  /* ── Initial fetch ─────────────────────────────────────────── */
+
   useEffect(() => {
     if (!videoUrlParam) { router.push("/"); return; }
     try {
-      const savedVocab = localStorage.getItem("tedmaster_vocab");
-      if (savedVocab) setVocabWords(JSON.parse(savedVocab));
+      const saved = localStorage.getItem("tedmaster_vocab");
+      if (saved) setVocabWords(JSON.parse(saved));
     } catch { localStorage.removeItem("tedmaster_vocab"); }
 
     const fetchData = async () => {
+      setLoading(true);
       try {
+        const tedLangMap: Record<string, string> = {
+          "zh": "zh-cn",
+          "zh-tw": "zh-tw",
+          "ja": "ja",
+          "en": "en"
+        };
         const res = await fetch("/api/parse", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: videoUrlParam }),
+          body: JSON.stringify({ 
+            url: videoUrlParam, 
+            targetLang: tedLangMap[lang] || "zh-cn" 
+          }),
         });
         const result = await res.json();
-        if (!res.ok) { console.error(result.error); router.push("/"); return; }
+        if (!res.ok) { router.push("/"); return; }
         setData(result);
-      } catch (e) { console.error(e); router.push("/"); } finally { setLoading(false); }
+      } catch { router.push("/"); }
+      finally { setLoading(false); }
     };
     fetchData();
-  }, [videoUrlParam, router]);
+  }, [videoUrlParam, router, lang]);
 
-  // HLS
+  /* ── HLS setup ─────────────────────────────────────────────── */
   useEffect(() => {
     if (!data?.videoUrl || !videoRef.current) return;
     const video = videoRef.current;
     let hls: Hls | null = null;
-
     if (data.isHls && Hls.isSupported()) {
       hls = new Hls({ enableWorker: false });
       hls.on(Hls.Events.ERROR, (_e, err) => {
-        if (err.fatal) {
-          console.warn("[HLS] fatal error, falling back to src:", err);
-          hls!.destroy(); hls = null;
-          // Fallback: try direct src (works for MP4, may not work for m3u8)
-          if (data.downloadUrl) video.src = data.downloadUrl;
-        }
+        if (err.fatal) { hls!.destroy(); hls = null; if (data.downloadUrl) video.src = data.downloadUrl; }
       });
       hls.loadSource(data.videoUrl);
       hls.attachMedia(video);
     } else if (data.isHls && video.canPlayType("application/vnd.apple.mpegurl")) {
-      // Safari native HLS
       video.src = data.videoUrl;
     } else {
       video.src = data.videoUrl;
     }
-
     return () => { if (hls) hls.destroy(); };
   }, [data]);
 
+  /* ── Active index ──────────────────────────────────────────── */
   const findActiveIndex = useCallback(() => {
     if (!data?.transcript) return -1;
-    let low = 0, high = data.transcript.length - 1;
-    while (low <= high) {
-        const mid = Math.floor((low + high) / 2);
-        const item = data.transcript[mid], nextItem = data.transcript[mid + 1];
-        if (currentTime >= item.startTime && (!nextItem || currentTime < nextItem.startTime)) return mid;
-        else if (currentTime < item.startTime) high = mid - 1;
-        else low = mid + 1;
+    let lo = 0, hi = data.transcript.length - 1;
+    while (lo <= hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      const item = data.transcript[mid], next = data.transcript[mid + 1];
+      if (currentTime >= item.startTime && (!next || currentTime < next.startTime)) return mid;
+      else if (currentTime < item.startTime) hi = mid - 1;
+      else lo = mid + 1;
     }
     return -1;
   }, [data, currentTime]);
@@ -172,31 +212,28 @@ function WatchContent() {
   useEffect(() => {
     if (activeIndex !== -1 && activeIndex !== lastActiveIndex) {
       setLastActiveIndex(activeIndex);
-      setTimeout(() => {
-        if (activeParagraphRef.current) activeParagraphRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 50);
+      setTimeout(() => activeParagraphRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
     }
   }, [activeIndex, lastActiveIndex]);
 
+  /* ── Helpers ───────────────────────────────────────────────── */
   const formatTime = (ms: number) => {
-    const total = Math.floor(ms / 1000);
-    const m = Math.floor(total / 60).toString().padStart(2, '0');
-    const s = (total % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
+    const s = Math.floor(ms / 1000);
+    return `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
   };
 
   const togglePlay = () => {
-    if (videoRef.current) {
-      if (!hasInteracted) setHasInteracted(true);
-      if (videoRef.current.paused) { videoRef.current.play(); setIsPlaying(true); }
-      else { videoRef.current.pause(); setIsPlaying(false); }
-    }
+    if (!videoRef.current) return;
+    if (!hasInteracted) setHasInteracted(true);
+    if (videoRef.current.paused) { videoRef.current.play(); setIsPlaying(true); }
+    else { videoRef.current.pause(); setIsPlaying(false); }
   };
 
-  const saveToVocab = (wordData: any) => {
+  const saveToVocab = (wordData: VocabItem) => {
     setVocabWords(prev => {
       const newList = [...prev.filter(i => i.word !== wordData.word), { ...wordData, addedAt: Date.now() }];
-      localStorage.setItem("tedmaster_vocab", JSON.stringify(newList)); return newList;
+      localStorage.setItem("tedmaster_vocab", JSON.stringify(newList));
+      return newList;
     });
     setActiveWord(null);
   };
@@ -206,423 +243,475 @@ function WatchContent() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
       mediaRecorderRef.current = recorder; audioChunksRef.current = [];
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      recorder.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
       recorder.onstop = () => {
         const newUrl = URL.createObjectURL(new Blob(audioChunksRef.current, { type: "audio/webm" }));
-        setAudioUrls(prev => {
-          if (prev[id]) URL.revokeObjectURL(prev[id]);
-          return { ...prev, [id]: newUrl };
-        });
+        setAudioUrls(prev => { if (prev[id]) URL.revokeObjectURL(prev[id]); return { ...prev, [id]: newUrl }; });
         setRecordingId(null); stream.getTracks().forEach(t => t.stop());
       };
       recorder.start(); setRecordingId(id);
-    } catch (err) { console.error(err); }
+    } catch (e) { console.error(e); }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") mediaRecorderRef.current.stop();
+    if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
   };
 
   const handleDeepAnalyze = async (item: TranscriptItem) => {
-    if (analysisData[item.id]) {
-      const { [item.id]: _, ...rest } = analysisData; setAnalysisData(rest); return;
-    }
-    if (videoRef.current) { videoRef.current.pause(); setIsPlaying(false); }
+    if (analysisData[item.id]) { const { [item.id]: _, ...rest } = analysisData; setAnalysisData(rest); return; }
+    videoRef.current?.pause(); setIsPlaying(false);
     setAnalysisLoading(item.id);
     try {
-      const res = await fetch("/api/ai", { method: "POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ action: "analyze", text: item.english }) });
+      const res = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "analyze", text: item.english }) });
       const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "AI analysis failed");
+      if (!res.ok) throw new Error(result.error);
       setAnalysisData(prev => ({ ...prev, [item.id]: result }));
-    } catch (e) { console.error(e); } finally { setAnalysisLoading(null); }
-  };
-
-  const handleWordSelect = (word: VocabItem) => {
-    if (videoRef.current) { videoRef.current.pause(); setIsPlaying(false); }
-    setActiveWord(word);
-  };
-
-  const exportPDF = () => {
-    setShowExportMenu(false);
-    window.print();
+    } catch (e) { console.error(e); }
+    finally { setAnalysisLoading(null); }
   };
 
   const exportSRT = () => {
-    const formatTime = (ms: number) => {
-      const hh = Math.floor(ms / 3600000).toString().padStart(2, '0');
-      const mm = Math.floor((ms % 3600000) / 60000).toString().padStart(2, '0');
-      const ss = Math.floor((ms % 60000) / 1000).toString().padStart(2, '0');
-      const mms = (ms % 1000).toString().padStart(3, '0');
-      return `${hh}:${mm}:${ss},${mms}`;
-    };
-    let content = data.transcript.map((item: TranscriptItem, i: number) => {
-      const nextTime = data.transcript[i+1]?.startTime || item.startTime + 2000;
-      return `${i + 1}\n${formatTime(item.startTime)} --> ${formatTime(nextTime)}\n${item.english}\n${item.translated}\n\n`;
-    }).join("");
-    const blob = new Blob([content], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `${data.title}_Subtitle.srt`; a.click();
-    URL.revokeObjectURL(url);
-    setShowExportMenu(false);
+    if (!data) return;
+    const fmt = (ms: number) => { const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000), s = Math.floor((ms % 60000) / 1000), ms2 = ms % 1000; return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")},${String(ms2).padStart(3,"0")}`; };
+    const content = data.transcript.map((item, i) => `${i + 1}\n${fmt(item.startTime)} --> ${fmt(data.transcript[i + 1]?.startTime ?? item.startTime + 3000)}\n${item.english}\n${item.translated}\n`).join("\n");
+    const url = URL.createObjectURL(new Blob([content], { type: "text/plain" }));
+    const a = document.createElement("a"); a.href = url; a.download = `${data.title}.srt`; a.click();
+    URL.revokeObjectURL(url); setShowExportMenu(false);
   };
 
-  const downloadVideoMP4 = () => {
-    if(!data.downloadUrl) return;
-    const a = document.createElement("a");
-    a.href = data.downloadUrl; a.download = `${data.title}.mp4`; a.target = "_blank"; a.click();
-    setShowExportMenu(false);
-  };
-
+  /* ── Loading screen ────────────────────────────────────────── */
   if (loading) return (
-    <div className="h-screen w-full flex items-center justify-center bg-bg-deep text-white">
-      <div className="flex flex-col items-center gap-6">
-         <div className="w-16 h-16 border-4 border-ted-red border-t-transparent rounded-full animate-spin" />
-         <p className="text-sm tracking-[0.5em] uppercase opacity-20">Syncing Nucleus...</p>
-      </div>
+    <div className="h-screen w-full flex flex-col items-center justify-center gap-4" style={{ background: "var(--bg)", color: "var(--text)" }}>
+      <div className="w-10 h-10 border-2 rounded-full animate-spin" style={{ borderColor: "var(--border)", borderTopColor: "var(--accent)" }} />
+      <p className="text-sm" style={{ color: "var(--text-2)" }}>{t.loadingTalk}</p>
     </div>
   );
 
+  /* ── Print styles ──────────────────────────────────────────── */
+  const printStyle = `@media print { html,body{height:auto!important;overflow:visible!important;background:white!important;color:black!important} body>div,#__next>div{height:auto!important;overflow:visible!important} .print-hidden{display:none!important} #print-view{display:block!important} @page{margin:15mm 20mm;size:A4} }`;
+
   return (
-    <div className="h-screen w-full bg-bg-deep text-white flex flex-col font-sans select-none overflow-hidden" style={{ fontFamily }}>
-      
-      {/* GLOBAL PRINT STYLE */}
-      <style jsx global>{`
-        @media print {
-          html, body {
-            height: auto !important;
-            overflow: visible !important;
-            background: white !important;
-            color: black !important;
-          }
-          /* Release the h-screen / overflow-hidden root chain */
-          body > div, #__next > div {
-            height: auto !important;
-            overflow: visible !important;
-          }
-          .print-hidden { display: none !important; }
-          #print-view { display: block !important; }
-          @page { margin: 15mm 20mm; size: A4; }
-        }
-      `}</style>
+    <div className="h-screen flex flex-col print-hidden" style={{ background: "var(--bg)", color: "var(--text)" }}>
+      <style>{printStyle}</style>
 
-      {/* WEB UI */}
-      <header className="h-16 px-6 flex items-center gap-4 glass-effect border-b border-white/10 z-[101] shrink-0 print-hidden">
-        <button onClick={() => router.push("/")} className="p-2 hover:bg-white/10 rounded-full transition-colors"><ChevronLeft className="w-6 h-6" /></button>
-        <div className="flex-1 overflow-hidden">
-          <h1 className="text-lg font-bold truncate tracking-tight">{data?.title}</h1>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="relative">
-             <button onClick={() => setShowExportMenu(!showExportMenu)} className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl border transition-all ${showExportMenu ? "bg-ted-red text-white border-ted-red shadow-lg" : "bg-white/5 border-white/10 hover:bg-white/10"}`}>
-                <Download className="w-4 h-4" />
-                <span className="text-sm font-bold">Synergy Hub</span>
-             </button>
-             {showExportMenu && (
-               <div className="absolute top-full mt-4 right-0 w-80 bg-neutral-900 border border-white/10 p-6 rounded-[2.5rem] shadow-4xl z-[102] animate-in slide-in-from-top-4 duration-300">
-                  <div className="text-[10px] uppercase font-black text-ted-red tracking-[0.3em] mb-6">Expert Export Hub</div>
-                  <div className="space-y-3">
-                     <button onClick={downloadVideoMP4} className={`w-full flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-ted-red/40 hover:bg-ted-red/5 transition-all text-left ${!data.downloadUrl ? 'opacity-30 grayscale cursor-not-allowed text-white/20':''}`}>
-                        <div className="flex items-center gap-4">
-                           <div className="p-2 bg-ted-red/20 rounded-xl"><Video className="w-5 h-5 text-ted-red" /></div>
-                           <div className="space-y-0.5">
-                              <div className="text-xs font-bold">Video Discovery</div>
-                              <div className="text-[10px] opacity-40">Download as 1080p MP4</div>
-                           </div>
-                        </div>
-                        {data.downloadUrl ? <Check className="w-4 h-4 text-ted-red" /> : <X className="w-4 h-4" />}
-                     </button>
-                     <button onClick={exportPDF} className="w-full flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-ted-red/40 hover:bg-ted-red/5 transition-all text-left">
-                        <div className="flex items-center gap-4">
-                           <div className="p-2 bg-ted-red/20 rounded-xl"><FileText className="w-5 h-5 text-ted-red" /></div>
-                           <div className="space-y-0.5">
-                              <div className="text-xs font-bold">Academic PDF</div>
-                              <div className="text-[10px] opacity-40">Bilingual Learning Script</div>
-                           </div>
-                        </div>
-                        <Check className="w-4 h-4 text-ted-red" />
-                     </button>
-                     <button onClick={exportSRT} className="w-full flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-ted-red/40 hover:bg-ted-red/5 transition-all text-left">
-                        <div className="flex items-center gap-4">
-                           <div className="p-2 bg-ted-red/20 rounded-xl"><FileCode className="w-5 h-5 text-ted-red" /></div>
-                           <div className="space-y-0.5">
-                              <div className="text-xs font-bold">SRT Subtitles</div>
-                              <div className="text-[10px] opacity-40">Standard Time-Synced Format</div>
-                           </div>
-                        </div>
-                        <Check className="w-4 h-4 text-ted-red" />
-                     </button>
-                  </div>
-               </div>
-             )}
-          </div>
-
-          <button onClick={() => setShowVocab(!showVocab)} className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl border transition-all ${showVocab ? "bg-ted-red text-white border-ted-red shadow-lg" : "bg-white/5 border-white/10 hover:bg-white/10"}`}>
-            <BookMarked className="w-5 h-5" />
-            <span className="text-sm font-bold">Vocabulary</span>
+      {/* ── Header ─────────────────────────────────────────────── */}
+      <header className="h-14 flex items-center gap-3 px-4 border-b shrink-0 print-hidden"
+        style={{ background: "var(--bg-2)", borderColor: "var(--border)" }}>
+        <button onClick={() => router.push("/")} className="p-2 rounded-lg transition-colors"
+          style={{ color: "var(--text-2)" }}
+          onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
+          onMouseLeave={e => (e.currentTarget.style.color = "var(--text-2)")}>
+          <ChevronLeft size={20} />
+        </button>
+        <h1 className="flex-1 text-sm font-semibold truncate" style={{ color: "var(--text)" }}>{data?.title}</h1>
+        <HeaderControls />
+        <div className="w-px h-6 mx-1" style={{ background: "var(--border)" }} />
+        {/* Vocab */}
+        <button onClick={() => setShowVocab(v => !v)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
+          style={{ background: showVocab ? "var(--accent)" : "var(--bg-3)", color: showVocab ? "#fff" : "var(--text-2)" }}>
+          <BookMarked size={15} />{t.vocab}
+          {vocabWords.length > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: showVocab ? "rgba(255,255,255,0.25)" : "var(--accent-s)", color: showVocab ? "#fff" : "var(--accent)" }}>{vocabWords.length}</span>}
+        </button>
+        {/* Export */}
+        <div className="relative">
+          <button onClick={() => setShowExportMenu(v => !v)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
+            style={{ background: showExportMenu ? "var(--accent)" : "var(--bg-3)", color: showExportMenu ? "#fff" : "var(--text-2)" }}>
+            <Download size={15} />{t.exportLabel}
           </button>
+          {showExportMenu && (
+            <div className="absolute top-full right-0 mt-2 w-56 rounded-xl shadow-xl z-[102] py-1"
+              style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}>
+              {[
+                { icon: <Video size={15} />, label: t.downloadVideo, action: () => { if (data?.downloadUrl) { const a = document.createElement("a"); a.href = data.downloadUrl; a.download = `${data.title}.mp4`; a.target = "_blank"; a.click(); } setShowExportMenu(false); }, disabled: !data?.downloadUrl },
+                { icon: <FileText size={15} />, label: t.exportPdf, action: () => { setShowExportMenu(false); window.print(); }, disabled: false },
+                { icon: <FileCode size={15} />, label: t.exportSrt, action: exportSRT, disabled: false },
+              ].map((item, i) => (
+                <button key={i} onClick={item.disabled ? undefined : item.action} disabled={item.disabled}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors disabled:opacity-30"
+                  style={{ color: "var(--text)" }}
+                  onMouseEnter={e => !item.disabled && (e.currentTarget.style.background = "var(--bg-3)")}
+                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                  <span style={{ color: "var(--accent)" }}>{item.icon}</span>{item.label}
+                  {!item.disabled && <Check size={13} className="ml-auto" style={{ color: "var(--text-3)" }} />}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </header>
 
-      {/* Use md:flex-row to ensure horizontal layout on tablets/PCs */}
-      <main className="flex-1 flex flex-col md:flex-row relative print-hidden h-[calc(100vh-64px)] overflow-hidden">
+      {/* ── Main layout ────────────────────────────────────────── */}
+      <main className="flex-1 flex flex-col md:flex-row overflow-hidden print-hidden">
+
+        {/* Vocab overlay */}
         {showVocab && (
-          <div className="absolute top-0 right-0 w-96 h-full z-50 p-6">
-             <VocabBook words={vocabWords} onRemove={(w) => setVocabWords(prev => prev.filter(i => i.word !== w))} onSelect={handleWordSelect} />
+          <div className="absolute top-14 right-0 w-80 bottom-0 z-50 p-3">
+            <VocabBook words={vocabWords}
+              onRemove={w => setVocabWords(prev => { const next = prev.filter(i => i.word !== w); localStorage.setItem("tedmaster_vocab", JSON.stringify(next)); return next; })}
+              onSelect={word => { videoRef.current?.pause(); setIsPlaying(false); setActiveWord(word); }} />
           </div>
         )}
 
-        {/* Player section */}
-        <section className="flex-[2] min-h-0 relative bg-black flex flex-col overflow-hidden group">
+        {/* ── Video player ─────────────────────────────────────── */}
+        <section className="flex-[3] flex flex-col bg-black overflow-hidden">
+          {/* Video */}
           <div className="flex-1 relative flex items-center justify-center overflow-hidden">
-            <video ref={videoRef} className="w-full h-full object-contain" onLoadedMetadata={() => setDuration(videoRef.current!.duration * 1000)} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onClick={togglePlay} />
-            
+            <video
+              ref={videoRef}
+              className="w-full h-full object-contain"
+              onLoadedMetadata={() => setDuration((videoRef.current?.duration ?? 0) * 1000)}
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
+              onClick={togglePlay}
+            />
+            {/* Subtitle overlay */}
             {hasInteracted && activeItem && (
-              <div className="absolute bottom-16 left-1/2 -translate-x-1/2 w-full max-w-5xl px-12 pointer-events-none text-center z-20">
-                <p className="font-bold mb-2 drop-shadow-[0_4px_12px_rgba(0,0,0,1)] leading-tight" style={{ fontSize: `${mainFontSize + 8}px`, color: mainColor }}>{activeItem.english}</p>
-                <p className="font-medium drop-shadow-lg leading-tight opacity-70" style={{ fontSize: `${subFontSize + 4}px`, color: subColor }}>{activeItem.translated}</p>
+              <div className="absolute bottom-4 left-0 right-0 px-8 text-center pointer-events-none">
+                <p className="font-semibold leading-snug drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]"
+                  style={{ fontSize: mainFontSize, color: "#fff" }}>{activeItem.english}</p>
+                {activeItem.translated && (
+                  <p className="mt-1 drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]"
+                    style={{ fontSize: subFontSize, color: "rgba(255,255,255,0.75)" }}>{activeItem.translated}</p>
+                )}
               </div>
             )}
-
+            {/* Start overlay */}
             {!hasInteracted && (
-              <div onClick={togglePlay} className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/60 backdrop-blur-xl cursor-pointer">
-                <PlayCircle className="w-24 h-24 text-ted-red drop-shadow-[0_0_40px_rgba(230,43,30,0.6)] animate-pulse" />
-                <p className="mt-8 text-xl font-bold tracking-[0.6em] text-white/50 uppercase">Synch Chronos</p>
+              <div onClick={togglePlay} className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 cursor-pointer" style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }}>
+                <div className="w-20 h-20 rounded-full flex items-center justify-center" style={{ background: "var(--accent)", boxShadow: "0 0 40px rgba(230,43,30,0.5)" }}>
+                  <Play size={32} fill="white" color="white" className="ml-1" />
+                </div>
+                <p className="text-sm font-medium text-white/60">{data?.title}</p>
               </div>
             )}
           </div>
-          
-          <div className={`p-6 bg-gradient-to-t from-black via-black/30 to-transparent transition-opacity z-40 ${showSettings || showSpeedMenu ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
-             <div className="relative h-6 flex items-center mb-6 px-2">
-                <input type="range" min="0" max={duration || 100} value={currentTime} onChange={(e)=> { videoRef.current!.currentTime=(Number(e.target.value)-subtitleOffset)/1000; setCurrentTime(Number(e.target.value)); }} className="w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-ted-red" />
-                <div className="absolute left-2 h-1 bg-ted-red rounded-full pointer-events-none shadow-[0_0_10px_rgba(230,43,30,1)]" style={{ width: `calc(${duration > 0 ? (currentTime/duration)*100 : 0}% - 8px)` }} />
-             </div>
 
-             <div className="flex items-center justify-between">
-                <div className="flex items-center gap-6">
-                   <button onClick={togglePlay} className="p-2 hover:bg-white/10 rounded-full">{isPlaying ? <Pause className="w-8 h-8 fill-white" /> : <Play className="w-8 h-8 fill-white" />}</button>
-                   <div className="text-xs font-mono opacity-40">{formatTime(currentTime)} / {formatTime(duration)}</div>
+          {/* Controls */}
+          <div className="shrink-0 px-4 pb-4 pt-3" style={{ background: "rgba(0,0,0,0.85)" }}>
+            {/* Progress bar */}
+            <div className="relative h-5 flex items-center mb-3 group/seek">
+              <div className="absolute inset-y-0 left-0 right-0 flex items-center">
+                <div className="w-full h-1 rounded-full" style={{ background: "rgba(255,255,255,0.15)" }}>
+                  <div className="h-full rounded-full" style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%`, background: "var(--accent)" }} />
                 </div>
-
-                <div className="flex items-center gap-6">
-                   <div className="relative">
-                      <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setShowSpeedMenu(false); }} className={`p-2 rounded-xl transition-all ${showSettings ? "bg-ted-red text-white" : "text-white/40 hover:text-white"}`}><Settings className="w-6 h-6" /></button>
-                      {showSettings && (
-                        <div className="absolute bottom-full mb-6 right-0 bg-neutral-900/95 backdrop-blur-3xl border border-white/10 p-8 rounded-[3rem] shadow-4xl z-50 w-80 space-y-8 animate-in slide-in-from-bottom-6 duration-300" onClick={e=>e.stopPropagation()}>
-                           <div className="space-y-6">
-                              <div className="flex items-center gap-3 text-ted-red opacity-80 font-bold uppercase tracking-widest text-[10px]"><Sliders className="w-4 h-4" /> Lab Params</div>
-                              <div className="grid grid-cols-2 gap-6">
-                                <div className="space-y-3"><span className="text-[9px] opacity-40 uppercase tracking-widest">Main Size</span><input type="range" min="14" max="48" value={mainFontSize} onChange={(e)=>setMainFontSize(Number(e.target.value))} className="w-full h-1 accent-ted-red" /></div>
-                                <div className="space-y-3"><span className="text-[9px] opacity-40 uppercase tracking-widest">Sub Size</span><input type="range" min="10" max="32" value={subFontSize} onChange={(e)=>setSubFontSize(Number(e.target.value))} className="w-full h-1 accent-ted-red" /></div>
-                              </div>
-                              <div className="space-y-3 p-4 bg-white/5 rounded-2xl border border-white/5">
-                                <span className="text-[10px] opacity-40 uppercase flex items-center gap-2"><FastForward className="w-3 h-3" /> Sync Offset: {subtitleOffset}ms</span>
-                                <input type="range" min="-3000" max="3000" step="100" value={subtitleOffset} onChange={(e)=>setSubtitleOffset(Number(e.target.value))} className="w-full h-1 accent-white" />
-                              </div>
-                           </div>
-                           <div className="space-y-6 pt-6 border-t border-white/5">
-                              <div className="flex flex-wrap gap-3">
-                                 {COLORS.map(c => ( <button key={c.value} onClick={()=>setMainColor(c.value)} className={`w-8 h-8 rounded-full border-2 transition-transform hover:scale-110 ${mainColor===c.value?'border-white shadow-[0_0_10px_white]':'border-transparent underline'}`} style={{ backgroundColor: c.value }} /> ))}
-                              </div>
-                              <div className="flex gap-2">
-                                 {FONTS.map(f => ( <button key={f.value} onClick={()=>setFontFamily(f.value)} className={`flex-1 px-3 py-2 rounded-xl text-[10px] border transition-all ${fontFamily===f.value?'bg-ted-red border-ted-red shadow-lg':'bg-white/5 border-white/10'}`} style={{ fontFamily: f.value }}>{f.name}</button> ))}
-                              </div>
-                           </div>
-                        </div>
-                      )}
-                   </div>
-                   <div className="relative">
-                      <button onClick={(e) => { e.stopPropagation(); setShowSpeedMenu(!showSpeedMenu); setShowSettings(false); }} className={`px-5 py-2.5 bg-white/5 rounded-xl text-xs font-bold border border-white/10 transition-all ${showSpeedMenu ? "text-ted-red border-ted-red/40" : ""}`}>{playbackRate}x</button>
-                      {showSpeedMenu && (
-                        <div className="absolute bottom-full mb-6 right-0 bg-neutral-900 border border-white/10 rounded-2xl overflow-hidden shadow-2xl z-50">
-                           {SPEEDS.map(r => ( <button key={r} onClick={() => { videoRef.current!.playbackRate=r; setPlaybackRate(r); setShowSpeedMenu(false); }} className={`block w-full px-8 py-4 text-sm hover:bg-ted-red transition-all ${r===playbackRate?'bg-ted-red text-white':'text-white/60'}`}>{r}x</button> ))}
-                        </div>
-                      )}
-                   </div>
+              </div>
+              <input type="range" min={0} max={duration || 100} value={currentTime}
+                onChange={e => { const v = Number(e.target.value); if (videoRef.current) videoRef.current.currentTime = (v - subtitleOffset) / 1000; setCurrentTime(v); }}
+                className="absolute inset-0 w-full opacity-0 cursor-pointer h-full" />
+            </div>
+            {/* Buttons row */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button onClick={togglePlay} className="text-white">
+                  {isPlaying ? <Pause size={22} fill="white" /> : <Play size={22} fill="white" />}
+                </button>
+                <span className="text-xs font-mono" style={{ color: "rgba(255,255,255,0.5)" }}>
+                  {formatTime(currentTime)} / {formatTime(duration)}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {/* Speed */}
+                <div className="relative">
+                  <button onClick={() => { setShowSpeedMenu(v => !v); setShowSettings(false); }}
+                    className="px-3 py-1 rounded text-xs font-bold border transition-all"
+                    style={{ color: showSpeedMenu ? "var(--accent)" : "rgba(255,255,255,0.6)", borderColor: showSpeedMenu ? "var(--accent)" : "rgba(255,255,255,0.2)" }}>
+                    {playbackRate}×
+                  </button>
+                  {showSpeedMenu && (
+                    <div className="absolute bottom-full mb-2 right-0 rounded-xl overflow-hidden shadow-xl"
+                      style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}>
+                      {SPEEDS.map(r => (
+                        <button key={r} onClick={() => { if (videoRef.current) videoRef.current.playbackRate = r; setPlaybackRate(r); setShowSpeedMenu(false); }}
+                          className="block w-full px-5 py-2 text-sm text-left transition-colors"
+                          style={{ color: r === playbackRate ? "var(--accent)" : "var(--text)", background: r === playbackRate ? "var(--accent-s)" : "transparent" }}
+                          onMouseEnter={e => { if (r !== playbackRate) e.currentTarget.style.background = "var(--bg-3)"; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = r === playbackRate ? "var(--accent-s)" : "transparent"; }}>
+                          {r}×
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-             </div>
+                {/* Settings */}
+                <div className="relative">
+                  <button onClick={() => { setShowSettings(v => !v); setShowSpeedMenu(false); }}
+                    className="p-1.5 rounded transition-colors"
+                    style={{ color: showSettings ? "var(--accent)" : "rgba(255,255,255,0.6)" }}>
+                    <Settings size={18} />
+                  </button>
+                  {showSettings && (
+                    <div className="absolute bottom-full mb-3 right-0 rounded-xl p-5 shadow-xl w-72 space-y-5"
+                      style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}
+                      onClick={e => e.stopPropagation()}>
+                      <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--accent)" }}><Sliders size={12} className="inline mr-1" />{t.settings}</p>
+                      <div className="grid grid-cols-2 gap-4">
+                        {[{ label: t.mainSize, value: mainFontSize, set: setMainFontSize, min: 14, max: 36 },
+                          { label: t.subSize, value: subFontSize, set: setSubFontSize, min: 10, max: 26 }].map(s => (
+                          <div key={s.label} className="space-y-1.5">
+                            <div className="flex justify-between text-xs" style={{ color: "var(--text-2)" }}>
+                              <span>{s.label}</span><span>{s.value}px</span>
+                            </div>
+                            <input type="range" min={s.min} max={s.max} value={s.value} onChange={e => s.set(Number(e.target.value))} className="w-full" />
+                          </div>
+                        ))}
+                      </div>
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between text-xs" style={{ color: "var(--text-2)" }}>
+                          <span><FastForward size={11} className="inline mr-1" />{t.syncOffset}</span>
+                          <span>{subtitleOffset > 0 ? "+" : ""}{subtitleOffset}ms</span>
+                        </div>
+                        <input type="range" min={-3000} max={3000} step={100} value={subtitleOffset} onChange={e => setSubtitleOffset(Number(e.target.value))} className="w-full" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
-        {/* Transcript Section */}
-        <section className="flex-1 min-h-0 bg-neutral-950/50 flex flex-col overflow-hidden border-l border-white/5">
-          <div className="p-6 border-b border-white/10 bg-white/[0.02] flex items-center justify-between">
-            <h2 className="font-bold text-sm tracking-widest flex items-center gap-2"><div className="w-1 h-4 bg-ted-red rounded-full" />SENTENCE MATRIX</h2>
+        {/* ── Transcript panel ──────────────────────────────────── */}
+        <section className="flex-[2] flex flex-col overflow-hidden border-l" style={{ borderColor: "var(--border)", background: "var(--bg)" }}>
+          <div className="px-4 py-3 border-b shrink-0 flex items-center gap-2" style={{ borderColor: "var(--border)", background: "var(--bg-2)" }}>
+            <div className="w-1 h-4 rounded-full" style={{ background: "var(--accent)" }} />
+            <span className="text-sm font-bold">{t.transcript}</span>
+            <span className="ml-auto text-xs" style={{ color: "var(--text-3)" }}>{data?.transcript?.length ?? 0}</span>
           </div>
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-1">
+            {data?.transcript?.map((item, idx) => {
+              const isActive = activeIndex === idx;
+              return (
+                <div key={item.id} ref={isActive ? activeParagraphRef : null}
+                  onClick={() => { if (!hasInteracted) setHasInteracted(true); if (videoRef.current) { videoRef.current.currentTime = (item.startTime - subtitleOffset) / 1000; videoRef.current.play(); } }}
+                  className="rounded-xl p-3 cursor-pointer transition-all group/item"
+                  style={{
+                    background: isActive ? "var(--bg-2)" : "transparent",
+                    border: `1px solid ${isActive ? "var(--border)" : "transparent"}`,
+                    opacity: isActive ? 1 : 0.55,
+                  }}
+                  onMouseEnter={e => { if (!isActive) { e.currentTarget.style.opacity = "1"; e.currentTarget.style.background = "var(--bg-3)"; } }}
+                  onMouseLeave={e => { if (!isActive) { e.currentTarget.style.opacity = "0.55"; e.currentTarget.style.background = "transparent"; } }}>
+                  {/* Sentence number + English */}
+                  <div className="flex gap-2 items-start">
+                    <span className="text-[10px] font-mono mt-0.5 w-6 shrink-0 text-right" style={{ color: "var(--text-3)" }}>{idx + 1}</span>
+                    <div className="flex-1">
+                      <p className="leading-relaxed font-medium" style={{ fontSize: mainFontSize - 2, color: isActive ? "var(--text)" : "inherit" }}>
+                        {item.english.split(" ").map((w, i) => (
+                          <span key={i} onClick={e => {
+                            e.stopPropagation();
+                            const clean = w.replace(/[^a-zA-Z'-]/g, "");
+                            if (!clean) return;
+                            (async () => {
+                              videoRef.current?.pause(); setIsPlaying(false);
+                              setWordLoading(true);
+                              setActiveWord({ word: clean, loading: true } as VocabItem & { loading: boolean });
+                              try {
+                                const r = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "define", text: clean, context: item.english }) });
+                                const result = await r.json();
+                                if (!r.ok) throw new Error(result.error);
+                                setActiveWord(result);
+                              } catch { setActiveWord(null); }
+                              finally { setWordLoading(false); }
+                            })();
+                          }}
+                            className="inline cursor-pointer rounded px-0.5 transition-colors"
+                            onMouseEnter={e => (e.currentTarget.style.background = "var(--accent-s)")}
+                            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                            {w}{" "}
+                          </span>
+                        ))}
+                      </p>
+                      {item.translated && (
+                        <p className="mt-0.5 leading-relaxed" style={{ fontSize: subFontSize - 1, color: "var(--text-2)" }}>{item.translated}</p>
+                      )}
+                    </div>
+                  </div>
 
-          <div ref={transcriptRef} className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar h-full">
-            {data?.transcript?.map((item: TranscriptItem, idx: number) => (
-              <div 
-                key={item.id}
-                ref={activeIndex === idx ? activeParagraphRef : null}
-                onClick={() => { if (!hasInteracted) setHasInteracted(true); videoRef.current!.currentTime=(item.startTime-subtitleOffset)/1000; videoRef.current!.play(); }}
-                className={`p-6 rounded-[2.5rem] transition-all cursor-pointer relative group/item border ${
-                  activeIndex === idx 
-                    ? "bg-white/[0.04] border-white/10 shadow-xl" 
-                    : "border-transparent opacity-30 hover:opacity-100 hover:bg-white/[0.03]"
-                }`}
-              >
-                {activeIndex === idx && <div className="absolute left-0 top-6 bottom-6 w-1 bg-ted-red rounded-full shadow-[0_0_15px_rgba(230,43,30,1)]" />}
-                <p className="font-bold leading-relaxed mb-2" style={{ fontSize: `${mainFontSize}px`, color: activeIndex === idx ? mainColor : "rgba(255,255,255,0.7)" }}>
-                  {item.english.split(" ").map((w, i) => (
-                    <span key={i} onClick={(e) => { e.stopPropagation(); (async () => {
-                      if(videoRef.current){ videoRef.current.pause(); setIsPlaying(false); }
-                      const cleanWord = w.replace(/[^a-zA-Z'-]/g, '');
-                      if (!cleanWord) return;
-                      setWordLoading(true); setActiveWord({ word: cleanWord, loading: true });
-                      try {
-                        const r = await fetch("/api/ai", { method: "POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ action: "define", text: cleanWord, context: item.english }) });
-                        const result = await r.json();
-                        if (!r.ok) throw new Error(result.error || "AI request failed");
-                        setActiveWord(result);
-                      } catch (e) { console.error(e); setActiveWord(null); }
-                      finally { setWordLoading(false); }
-                    })(); }} className="inline-block hover:bg-ted-red/20 rounded px-1">{w}</span>
-                  ))}
-                </p>
-                {item.translated && <p className="italic font-medium leading-relaxed" style={{ fontSize: `${subFontSize}px`, color: subColor, opacity: activeIndex === idx ? 1 : 0.4 }}>{item.translated}</p>}
-                
-                <div className="mt-6 flex gap-3 opacity-0 group-hover/item:opacity-100 transition-opacity">
-                   <button onClick={(e) => { e.stopPropagation(); handleDeepAnalyze(item); }} className={`flex items-center gap-2 text-[10px] px-4 py-2 rounded-full border transition-all font-bold ${analysisData[item.id] ? "bg-white text-black" : "bg-white/5 border-white/10"}`}>
-                     {analysisLoading === item.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />} AI X-RAY
-                   </button>
-                   <button onClick={(e) => { e.stopPropagation(); recordingId === item.id ? stopRecording() : startRecording(item.id); }} className={`p-2.5 rounded-xl border transition-all ${recordingId === item.id ? "bg-ted-red border-ted-red animate-pulse" : "bg-white/5 border-white/10"}`}><Mic className="w-4 h-4" /></button>
-                </div>
+                  {/* Action row */}
+                  <div className="flex items-center gap-2 mt-2 pl-8 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                    <button onClick={e => { e.stopPropagation(); handleDeepAnalyze(item); }}
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all"
+                      style={{ background: analysisData[item.id] ? "var(--accent)" : "var(--bg-3)", color: analysisData[item.id] ? "#fff" : "var(--text-2)" }}>
+                      {analysisLoading === item.id ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+                      {t.analyzeBtn}
+                    </button>
+                    <button onClick={e => { e.stopPropagation(); recordingId === item.id ? stopRecording() : startRecording(item.id); }}
+                      className="p-1.5 rounded-lg transition-all"
+                      style={{ background: recordingId === item.id ? "var(--accent)" : "var(--bg-3)", color: recordingId === item.id ? "#fff" : "var(--text-2)" }}>
+                      <Mic size={13} />
+                    </button>
+                    {audioUrls[item.id] && (
+                      <audio src={audioUrls[item.id]} controls className="h-6" style={{ maxWidth: "140px" }} />
+                    )}
+                  </div>
 
-                {analysisData[item.id] && (
-                  <div className="mt-6 p-6 rounded-3xl bg-neutral-900 border border-white/10 animate-in slide-in-from-top-4 space-y-6">
-                     <div className="space-y-2 pb-4 border-b border-white/5">
-                        <div className="text-[10px] font-bold text-ted-red uppercase tracking-widest">Structure Matrix</div>
-                        <p className="text-[12px] text-white/90 leading-relaxed">{analysisData[item.id].structureZh}</p>
-                     </div>
-                     <div className="space-y-4">
-                        {analysisData[item.id].breakdown?.map((p: any, i: number) => (
-                          <div key={i} className="flex gap-4 p-3 rounded-2xl bg-white/[0.03] border border-white/5">
-                             <span className="text-[9px] font-mono text-ted-red/60 w-16 uppercase">{p.label}</span>
-                             <div className="space-y-1"><p className="text-[11px] font-bold text-white leading-relaxed">{p.content}</p><p className="text-[10px] text-white/30 italic">{p.explanation}</p></div>
+                  {/* Analysis panel */}
+                  {analysisData[item.id] && (
+                    <div className="mt-3 ml-8 p-4 rounded-xl space-y-4" style={{ background: "var(--bg-3)", border: "1px solid var(--border)" }}>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--accent)" }}>{t.structure}</p>
+                        <p className="text-xs leading-relaxed" style={{ color: "var(--text)" }}>{analysisData[item.id].structureZh}</p>
+                      </div>
+                      <div className="space-y-2">
+                        {analysisData[item.id].breakdown?.map((p, i) => (
+                          <div key={i} className="grid grid-cols-[120px_1fr] gap-3 text-[11px] leading-relaxed items-start">
+                            <span className="font-mono text-right font-bold pt-0.5" style={{ color: "var(--accent)" }}>{p.label}</span>
+                            <div className="flex-1">
+                              <span className="font-semibold" style={{ color: "var(--text)" }}>{p.content}</span>
+                              {p.explanation && <span className="ml-2" style={{ color: "var(--text-2)" }}>{p.explanation}</span>}
+                            </div>
                           </div>
                         ))}
-                     </div>
-                     {analysisData[item.id].insights?.length > 0 && (
-                       <div className="space-y-3 pt-4 border-t border-white/5">
-                          <div className="text-[10px] font-bold text-ted-red uppercase tracking-widest">Learning Insights</div>
-                          {analysisData[item.id].insights.map((ins: any, i: number) => (
-                            <div key={i} className="p-3 rounded-2xl bg-white/[0.03] border border-white/5 space-y-1">
-                              <p className="text-[11px] font-bold text-white/80">{ins.title}</p>
-                              <p className="text-[10px] text-white/40 leading-relaxed">{ins.content}</p>
+                      </div>
+                      {analysisData[item.id].insights?.length > 0 && (
+                        <div className="pt-3 border-t space-y-2" style={{ borderColor: "var(--border)" }}>
+                          <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--accent)" }}>{t.insights}</p>
+                          {analysisData[item.id].insights.map((ins, i) => (
+                            <div key={i} className="text-xs space-y-0.5">
+                              <p className="font-semibold" style={{ color: "var(--text)" }}>{ins.title}</p>
+                              <p style={{ color: "var(--text-2)" }}>{ins.content}</p>
                             </div>
                           ))}
-                       </div>
-                     )}
-                  </div>
-                )}
-              </div>
-            ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </section>
       </main>
 
-      {/* RE-DESIGNED KNOWLEDGE MODAL */}
+      {/* ── Word modal ─────────────────────────────────────────── */}
       {activeWord && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-3xl p-6 print-hidden" onClick={() => setActiveWord(null)}>
-           <div className="relative w-full max-w-3xl max-h-[90vh] flex flex-col p-10 rounded-[4rem] bg-neutral-900 border border-white/10 shadow-[0_40px_100px_rgba(0,0,0,0.9)] overflow-hidden animate-in zoom-in-95 duration-300" onClick={e=>e.stopPropagation()}>
-             <div className="absolute -top-24 -left-24 w-64 h-64 bg-ted-red/10 blur-[100px] rounded-full" />
-             <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-blue-500/10 blur-[100px] rounded-full" />
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 print-hidden"
+          style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)" }}
+          onClick={() => setActiveWord(null)}>
+          <div className="w-full max-w-xl max-h-[88vh] flex flex-col rounded-2xl shadow-2xl overflow-hidden"
+            style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}
+            onClick={e => e.stopPropagation()}>
 
-             {wordLoading ? (
-               <div className="flex flex-col items-center justify-center gap-6 py-20 flex-1"><Loader2 className="w-16 h-16 animate-spin text-ted-red opacity-30" /><p className="text-[10px] uppercase tracking-[0.4em] opacity-30">Accessing Oracle...</p></div>
-             ) : (
-               <>
-                 <div className="relative z-10 text-center space-y-3 mb-10 shrink-0">
-                   <h2 className="text-8xl font-black tracking-tighter text-white drop-shadow-md">{activeWord.word.replace(/[^a-zA-Z]/g, '')}</h2>
-                   <div className="flex items-center justify-center gap-8">
-                     <span className="px-5 py-2 bg-ted-red/20 text-ted-red font-mono font-black tracking-[0.2em] text-xs uppercase rounded-2xl border border-ted-red/30 shadow-lg">{activeWord.partOfSpeech}</span>
-                     <div className="flex items-center gap-4">
-                       <span className="text-white/40 text-2xl font-mono tracking-widest">{activeWord.phonetic}</span>
-                       <button onClick={(e) => { e.stopPropagation(); const u = new SpeechSynthesisUtterance(activeWord.word); u.lang='en-US'; u.rate=0.8; window.speechSynthesis.speak(u); }} className="p-3 bg-white/5 hover:bg-white/10 rounded-full text-white/40 hover:text-white transition-all"><Volume2 className="w-5 h-5" /></button>
-                     </div>
-                   </div>
-                 </div>
-
-                 <div className="relative z-10 flex-1 overflow-y-auto custom-scrollbar pr-4 space-y-10 focus:outline-none">
-                    <div className="p-10 rounded-[3rem] bg-white/[0.04] border border-white/10 shadow-2xl relative overflow-hidden">
-                       <div className="text-[11px] font-bold text-ted-red uppercase tracking-[0.4em] mb-6 flex items-center gap-3"><div className="w-2 h-2 rounded-full bg-ted-red" />Core Meaning</div>
-                       <p className="text-4xl font-extrabold text-white tracking-tight leading-normal mb-6">{activeWord.definitionZh}</p>
-                       {activeWord.tense && <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-black rounded-xl uppercase tracking-widest"><FastForward className="w-4 h-4" /> {activeWord.tense}</div>}
+            {wordLoading ? (
+              <div className="flex flex-col items-center justify-center gap-3 py-16">
+                <Loader2 size={28} className="animate-spin" style={{ color: "var(--accent)" }} />
+                <p className="text-sm" style={{ color: "var(--text-2)" }}>{t.loading}</p>
+              </div>
+            ) : (
+              <>
+                {/* Modal header */}
+                <div className="flex items-start justify-between p-6 pb-4 border-b" style={{ borderColor: "var(--border)" }}>
+                  <div>
+                    <h2 className="text-3xl font-black tracking-tight">{activeWord.word?.replace(/[^a-zA-Z'-]/g, "")}</h2>
+                    <div className="flex items-center gap-3 mt-2">
+                      <span className="text-xs px-2 py-0.5 rounded font-bold" style={{ background: "var(--accent-s)", color: "var(--accent)" }}>{activeWord.partOfSpeech}</span>
+                      <span className="text-sm font-mono" style={{ color: "var(--text-2)" }}>{activeWord.phonetic}</span>
+                      <button onClick={() => { const u = new SpeechSynthesisUtterance(activeWord.word); u.lang = "en-US"; u.rate = 0.85; speechSynthesis.speak(u); }}
+                        className="p-1 rounded transition-colors" style={{ color: "var(--text-3)" }}
+                        onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
+                        onMouseLeave={e => (e.currentTarget.style.color = "var(--text-3)")}>
+                        <Volume2 size={15} />
+                      </button>
                     </div>
+                  </div>
+                  <button onClick={() => setActiveWord(null)} className="p-1.5 rounded-lg transition-colors" style={{ color: "var(--text-3)" }}
+                    onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
+                    onMouseLeave={e => (e.currentTarget.style.color = "var(--text-3)")}>
+                    <X size={18} />
+                  </button>
+                </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                       <div className="p-8 rounded-[2.5rem] bg-neutral-800/40 border border-white/5 space-y-6">
-                          <div className="text-[10px] font-bold text-white/20 uppercase tracking-[0.3em]">SYNONYMS / 同义词</div>
-                          <div className="flex flex-wrap gap-2">{activeWord.synonyms?.map((s: string, i: number) => (<span key={i} className="px-4 py-2 bg-white/5 border border-white/10 text-xs text-white/80 rounded-full">{s}</span>))}</div>
-                       </div>
-                       <div className="p-8 rounded-[2.5rem] bg-neutral-800/40 border border-white/5 space-y-6">
-                          <div className="text-[10px] font-bold text-white/20 uppercase tracking-[0.3em]">ANTONYMS / 反义词</div>
-                          <div className="flex flex-wrap gap-2">{activeWord.antonyms?.map((a: string, i: number) => (<span key={i} className="px-4 py-2 bg-white/5 border border-white/10 text-xs text-white/30 rounded-full">{a}</span>))}</div>
-                       </div>
+                {/* Modal body */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-5">
+                  {/* Meaning */}
+                  <div className="p-4 rounded-xl" style={{ background: "var(--bg-3)" }}>
+                    <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--accent)" }}>{t.meaning}</p>
+                    <p className="text-xl font-bold leading-snug">{activeWord.definitionZh}</p>
+                    {activeWord.tense && <p className="text-xs mt-2 px-2 py-1 rounded inline-block" style={{ background: "var(--accent-s)", color: "var(--accent)" }}>{activeWord.tense}</p>}
+                  </div>
+
+                  {/* Synonyms / Antonyms */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {[{ label: t.synonyms, items: activeWord.synonyms }, { label: t.antonyms, items: activeWord.antonyms }].map(({ label, items }) => items?.length ? (
+                      <div key={label} className="p-3 rounded-xl" style={{ background: "var(--bg-3)" }}>
+                        <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-2)" }}>{label}</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {items.map((s: string, i: number) => (
+                            <span key={i} className="text-xs px-2 py-0.5 rounded-full border" style={{ color: "var(--text-2)", borderColor: "var(--border)" }}>{s}</span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null)}
+                  </div>
+
+                  {/* Collocations */}
+                  {activeWord.phrases?.length ? (
+                    <div className="p-3 rounded-xl" style={{ background: "var(--bg-3)" }}>
+                      <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-2)" }}>{t.collocations}</p>
+                      <div className="space-y-1">
+                        {activeWord.phrases.map((p: string, i: number) => (
+                          <p key={i} className="text-sm border-l-2 pl-3 py-0.5" style={{ color: "var(--text)", borderColor: "var(--accent)" }}>{p}</p>
+                        ))}
+                      </div>
                     </div>
+                  ) : null}
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                       <div className="p-8 rounded-[2.5rem] bg-neutral-800/40 border border-white/5 space-y-6">
-                          <div className="text-[10px] font-bold text-white/20 uppercase tracking-[0.3em]">COLLOCATIONS / 搭配</div>
-                          <div className="space-y-3">{activeWord.phrases?.map((p: string, i: number) => (<p key={i} className="text-[13px] font-bold text-white/70 border-l-2 border-ted-red/40 pl-4 py-0.5">{p}</p>))}</div>
-                       </div>
-                       <div className="p-8 rounded-[2.5rem] bg-white/[0.02] border border-white/[0.05] space-y-6">
-                          <div className="text-[10px] font-bold text-white/20 uppercase tracking-[0.3em]">BILINGUAL USAGE / 例句</div>
-                          <div className="space-y-3"><p className="text-[15px] font-medium text-white/90 leading-relaxed">“{activeWord.exampleEn}”</p><p className="text-[13px] text-white/40 italic">“{activeWord.exampleZh}”</p></div>
-                       </div>
+                  {/* Example */}
+                  {activeWord.exampleEn && (
+                    <div className="p-3 rounded-xl" style={{ background: "var(--bg-3)" }}>
+                      <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-2)" }}>{t.example}</p>
+                      <p className="text-sm leading-relaxed" style={{ color: "var(--text)" }}>"{activeWord.exampleEn}"</p>
+                      {activeWord.exampleZh && <p className="text-xs mt-1 leading-relaxed" style={{ color: "var(--text-2)" }}>"{activeWord.exampleZh}"</p>}
                     </div>
-                 </div>
+                  )}
+                </div>
 
-                 <div className="relative z-10 pt-10 shrink-0 flex flex-col items-center">
-                    <button onClick={() => saveToVocab(activeWord)} className="group relative w-full h-20 rounded-[2.5rem] bg-ted-red overflow-hidden shadow-[0_20px_60px_rgba(230,43,30,0.5)] transition-all hover:scale-[1.01] active:scale-95">
-                        <div className="flex items-center justify-center gap-4 text-white font-black text-2xl tracking-tight"><BookMarked className="w-8 h-8" /> Capture Knowledge</div>
-                    </button>
-                    <button onClick={()=>setActiveWord(null)} className="mt-6 text-[11px] uppercase font-bold tracking-[0.4em] opacity-20 hover:opacity-100 transition-opacity">Dismiss Inspector</button>
-                 </div>
-               </>
-             )}
-           </div>
+                {/* Save button */}
+                <div className="p-4 border-t" style={{ borderColor: "var(--border)" }}>
+                  <button onClick={() => saveToVocab(activeWord as VocabItem)}
+                    className="w-full py-3 rounded-xl font-bold text-white transition-all"
+                    style={{ background: "var(--accent)" }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "var(--accent-h)")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "var(--accent)")}>
+                    <BookMarked size={16} className="inline mr-2" />{t.saveWord}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 
-      {/* PRINT VIEW */}
+      {/* ── Print view ─────────────────────────────────────────── */}
       <div id="print-view" className="hidden bg-white text-black w-full font-sans">
-        {/* Compact header */}
         <div style={{ borderBottom: "4px solid #E62B1E", paddingBottom: "10px", marginBottom: "14px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
-              <div style={{ fontSize: "9px", fontWeight: 900, letterSpacing: "0.25em", textTransform: "uppercase", color: "#E62B1E", marginBottom: "4px" }}>TEDMaster · Learning Script</div>
-              <div style={{ fontSize: "16px", fontWeight: 900, lineHeight: 1.2 }}>{data?.title}</div>
+              <div style={{ fontSize: "9px", fontWeight: 900, letterSpacing: "0.2em", textTransform: "uppercase", color: "#E62B1E", marginBottom: "3px" }}>TEDMaster · Learning Script</div>
+              <div style={{ fontSize: "16px", fontWeight: 900 }}>{data?.title}</div>
               <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>{data?.presenter}</div>
             </div>
-            <div style={{ fontSize: "9px", color: "#aaa", textAlign: "right", flexShrink: 0, marginLeft: "20px" }}>
-              <div>{new Date().toLocaleDateString("zh-CN")}</div>
-              <div style={{ marginTop: "2px" }}>{data?.transcript?.length ?? 0} sentences</div>
+            <div style={{ fontSize: "9px", color: "#aaa", textAlign: "right" }}>
+              <div>{new Date().toLocaleDateString()}</div>
+              <div>{data?.transcript?.length} sentences</div>
             </div>
           </div>
         </div>
-
-        {/* Interleaved bilingual sentences — compact */}
         <div>
-          {data?.transcript?.map((item: TranscriptItem, i: number) => (
+          {data?.transcript?.map((item, i) => (
             <div key={item.id} style={{ display: "flex", gap: "8px", padding: "4px 0", borderBottom: "1px solid #f0f0f0", pageBreakInside: "avoid", breakInside: "avoid" }}>
               <span style={{ fontSize: "8px", color: "#ccc", fontFamily: "monospace", width: "20px", flexShrink: 0, paddingTop: "2px", textAlign: "right" }}>{i + 1}</span>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: "11px", lineHeight: 1.5, color: "#111", fontWeight: 500 }}>{item.english}</div>
-                {item.translated && (
-                  <div style={{ fontSize: "10px", lineHeight: 1.4, color: "#888", marginTop: "1px" }}>{item.translated}</div>
-                )}
+                {item.translated && <div style={{ fontSize: "10px", lineHeight: 1.4, color: "#888", marginTop: "1px" }}>{item.translated}</div>}
               </div>
             </div>
           ))}
         </div>
-
-        {/* Footer */}
         <div style={{ marginTop: "16px", paddingTop: "8px", borderTop: "1px solid #eee", display: "flex", justifyContent: "space-between", fontSize: "8px", color: "#bbb" }}>
-          <span>{data?.title}</span>
-          <span>TEDMaster · AI-Powered Intensive Reading</span>
+          <span>{data?.title}</span><span>TEDMaster · AI-Powered English Learning</span>
         </div>
       </div>
     </div>
@@ -632,8 +721,8 @@ function WatchContent() {
 export default function WatchPage() {
   return (
     <Suspense fallback={
-      <div className="h-screen w-full flex items-center justify-center bg-bg-deep text-white">
-        <div className="w-16 h-16 border-4 border-ted-red border-t-transparent rounded-full animate-spin" />
+      <div className="h-screen w-full flex items-center justify-center" style={{ background: "var(--bg)" }}>
+        <div className="w-10 h-10 border-2 rounded-full animate-spin" style={{ borderColor: "var(--border)", borderTopColor: "var(--accent)" }} />
       </div>
     }>
       <WatchContent />
