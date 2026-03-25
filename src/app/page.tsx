@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Search, Zap, Mic, BookOpen, Sun, Moon, ChevronDown } from "lucide-react";
+import { Loader2, Search, Zap, Mic, BookOpen, Sun, Moon, ChevronDown, User, LogIn, X } from "lucide-react";
+import AuthModal from "@/components/AuthModal";
+import { useEffect } from "react";
 
 const GithubIcon = () => (
   <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
@@ -16,9 +18,34 @@ export default function Home() {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ title: string; presenter: string; description: string } | null>(null);
+  const [user, setUser] = useState<{ email: string; credits: number } | null>(null);
+  const [showAuth, setShowAuth] = useState(false);
   const [error, setError] = useState("");
   const [showLangMenu, setShowLangMenu] = useState(false);
   const router = useRouter();
+
+  type UserHistory = {
+    id: string;
+    videoUrl: string;
+    title: string;
+    presenter: string;
+    progressTime: number;
+    duration: number | null;
+  };
+
+  const [history, setHistory] = useState<UserHistory[]>([]);
+  useEffect(() => {
+    fetch("/api/auth/me").then(res => res.json()).then(data => {
+      if (data.user) {
+        setUser(data.user);
+        fetch("/api/user/history")
+          .then(res => res.json())
+          .then(hData => {
+            if (Array.isArray(hData)) setHistory(hData);
+          }).catch(() => {});
+      }
+    }).catch(() => {});
+  }, []);
 
   const handleAnalyze = async () => {
     const trimmed = url.trim();
@@ -59,6 +86,8 @@ export default function Home() {
           </span>
         </div>
         <div className="flex items-center gap-1">
+          {/* 移除首页的登录入口 */}
+          <div className="w-px h-6 mx-1 bg-border hidden md:block" />
           {/* GitHub */}
           <a
             href="https://github.com/TrojanFish/TedMater"
@@ -182,9 +211,9 @@ export default function Home() {
           {result && (
             <div className="w-full rounded-xl p-5 text-left border-l-4 card"
               style={{ borderLeftColor: "var(--accent)" }}>
-              <p className="text-base font-bold leading-snug">{result.title}</p>
+              <p className="text-base font-bold leading-snug" style={{ color: "var(--text)" }}>{result.title}</p>
               <p className="text-sm mt-0.5 mb-3" style={{ color: "var(--accent)" }}>{t.by} {result.presenter}</p>
-              <p className="text-sm leading-relaxed line-clamp-2 mb-4" style={{ color: "var(--text-2)" }}>{result.description}</p>
+              <p className="text-sm leading-relaxed line-clamp-2 mb-4" style={{ color: "var(--text)" }}>{result.description}</p>
               <button
                 onClick={() => router.push(`/watch?url=${encodeURIComponent(url.trim())}`)}
                 className="w-full py-2.5 rounded-lg text-sm font-bold text-white transition-all"
@@ -197,6 +226,34 @@ export default function Home() {
             </div>
           )}
         </div>
+
+        {/* ── Continue Learning Dashboard ────────────────────────── */}
+        {user && history.length > 0 && !result && (
+          <div className="w-full max-w-4xl flex flex-col gap-4 mt-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <h3 className="font-bold text-lg flex items-center gap-2">
+              <Zap size={18} className="text-accent" />
+              Continue Learning
+            </h3>
+            <div className="w-full flex gap-4 overflow-x-auto pb-4 custom-scrollbar snap-x snap-mandatory">
+              {history.map((hItem) => (
+                <div 
+                  key={hItem.id} 
+                  onClick={() => router.push(`/watch?url=${encodeURIComponent(hItem.videoUrl)}&t=${Math.floor(hItem.progressTime)}`)}
+                  className="card flex-none w-[280px] p-4 cursor-pointer hover:-translate-y-1 transition-all snap-start group relative overflow-hidden"
+                >
+                  <div className="absolute inset-x-0 bottom-0 h-1 bg-border">
+                     <div 
+                        className="h-full bg-accent transition-all duration-1000 group-hover:bg-accent-h"
+                        style={{ width: `${hItem.duration ? Math.min(100, (hItem.progressTime / hItem.duration) * 100) : 0}%` }}
+                     />
+                  </div>
+                  <h4 className="font-bold text-sm line-clamp-2 leading-tight mb-2 group-hover:text-accent transition-colors">{hItem.title}</h4>
+                  <p className="text-xs text-text-2">{hItem.presenter}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ── Features ─────────────────────────────────────────── */}
         <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -216,6 +273,7 @@ export default function Home() {
       <footer className="py-4 text-center text-xs border-t" style={{ color: "var(--text-3)", borderColor: "var(--border)" }}>
         {t.footer}
       </footer>
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} onSuccess={(u) => setUser(u)} />}
     </div>
   );
 }

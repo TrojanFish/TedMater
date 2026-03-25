@@ -1,0 +1,51 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  username     String?
+  passwordHash String
+  credits      Int      @default(100) // 初始赠送积分
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  transactions Transaction[]
+  history      History[]
+}
+
+model Transaction {
+  id        String   @id @default(uuid())
+  userId    String
+  action    String   // WORD_LOOKUP, AI_ANALYZE, PDF_EXPORT, RECHARGE
+  amount    Int      // 消耗或增加的数量
+  balance   Int      // 事务后的余额
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model History {
+  id           String   @id @default(uuid())
+  userId       String
+  videoUrl     String
+  title        String
+  presenter    String
+  progressTime Float    // 播放到多少秒
+  duration     Float?   // 总时长
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt // 用于排序最近观看
+
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, videoUrl]) // 每个用户看同一个视频只保留一条最新记录
+}

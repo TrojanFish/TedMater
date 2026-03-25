@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import * as jwt from "jsonwebtoken";
 import * as cheerio from "cheerio";
 import { z } from "zod";
+
+export const dynamic = "force-dynamic";
 
 const TedUrlSchema = z.string().url().regex(/ted\.com\/talks\//);
 
@@ -40,19 +44,25 @@ export async function POST(req: NextRequest) {
 
     const videoData = pageProps.videoData;
 
-    // Aggressive Metadata Extraction — try known paths first, then regex fallback
-    const playerData = videoData.playerData || {};
-    const acmePlayerData = videoData.acmePlayerData || {};
-    const resources = playerData.resources || {};
-    const acmeResources = acmePlayerData.resources || {};
+    // Aggressive Metadata Extraction — handle both object and serialized string cases
+    let playerData = videoData.playerData || {};
+    if (typeof playerData === "string") {
+      try { playerData = JSON.parse(playerData); } catch { playerData = {}; }
+    }
+    
+    let acmePlayerData = videoData.acmePlayerData || {};
+    if (typeof acmePlayerData === "string") {
+      try { acmePlayerData = JSON.parse(acmePlayerData); } catch { acmePlayerData = {}; }
+    }
 
+    const resources = (playerData.resources || acmePlayerData.resources || videoData.resources || {});
+    
     // Known path: HLS
     let hlsUrl: string | null =
-      acmeResources.hls?.stream || acmeResources.hls?.main ||
       resources.hls?.stream || resources.hls?.main || null;
 
     // Known path: MP4 (highest bitrate)
-    const allH264: any[] = [...(resources.h264 || []), ...(acmeResources.h264 || [])];
+    const allH264: any[] = [...(resources.h264 || [])];
     let mp4Url: string | null = null;
     if (allH264.length > 0) {
       const sorted = allH264.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
@@ -65,10 +75,17 @@ export async function POST(req: NextRequest) {
       mp4Url = dl.high || dl.medium || dl.low || null;
     }
 
-    // HLS that is actually MP4
-    if (hlsUrl?.endsWith(".mp4")) { mp4Url = mp4Url || hlsUrl; hlsUrl = null; }
+    // Last-resort: search metadata blob
+    if (!hlsUrl && !mp4Url && videoData.metadata) {
+      const meta = videoData.metadata;
+      hlsUrl = meta.hls?.stream || meta.hls?.main || null;
+      if (!mp4Url && meta.h264) {
+        const sorted = meta.h264.sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0));
+        mp4Url = sorted[0]?.file || null;
+      }
+    }
 
-    // Last-resort: regex scan of the entire JSON blob for video URLs
+    // Regex scan fallback
     if (!hlsUrl && !mp4Url) {
       const jsonStr = JSON.stringify(data);
       const m3u8Match = jsonStr.match(/https?:\\?\/\\?\/[^"\\]+\.m3u8[^"\\]*/);
@@ -80,12 +97,15 @@ export async function POST(req: NextRequest) {
     console.log("[TED Parser] hlsUrl:", hlsUrl, "| mp4Url:", mp4Url);
 
     // 2. Transcript Alignment
-    const englishParagraphs = pageProps.transcriptData?.translation?.paragraphs || [];
+    const transcriptData = pageProps.transcriptData || {};
+    const englishParagraphs = transcriptData.translation?.paragraphs || [];
     const englishCues = englishParagraphs.flatMap((p: any) => (p.cues || []));
 
     let translatedCues: any[] = [];
-    try {
-      if (targetLang && targetLang !== "en") {
+    let isTranslationMissing = false;
+
+    if (targetLang && targetLang !== "en") {
+      try {
         const transRes = await fetch(`${url}?language=${targetLang}`, { headers: { "User-Agent": "Mozilla/5.0" } });
         const transHtml = await transRes.text();
         const $t = cheerio.load(transHtml);
@@ -94,9 +114,15 @@ export async function POST(req: NextRequest) {
           const tData = JSON.parse(transDataJson);
           const tParas = tData.props.pageProps.transcriptData?.translation?.paragraphs || [];
           translatedCues = tParas.flatMap((p: any) => (p.cues || []));
+          if (translatedCues.length === 0) isTranslationMissing = true;
+        } else {
+          isTranslationMissing = true;
         }
+      } catch (e) { 
+        console.warn("Translation failed", e);
+        isTranslationMissing = true;
       }
-    } catch (e) { console.warn("Translation failed", e); }
+    }
 
     const mergedSentences = englishCues.map((eCue: any, idx: number) => {
       let tCue = translatedCues.find((tc: any) => Math.abs(tc.time - eCue.time) < 1000);
@@ -104,15 +130,27 @@ export async function POST(req: NextRequest) {
     });
 
     // Prefer MP4 to avoid HLS CORS issues in the browser
+    // Prefer HLS from hls.ted.com because it has CORS enabled. 
+    // py.tedcdn.com MP4s often return 403 Forbidden.
+    let finalVideoUrl = mp4Url || hlsUrl;
+    let finalIsHls = !mp4Url && !!hlsUrl;
+
+    if (hlsUrl && hlsUrl.includes("hls.ted.com")) {
+      finalVideoUrl = hlsUrl;
+      finalIsHls = true;
+    }
+
     return NextResponse.json({
       title: videoData.title,
       presenter: videoData.presenterDisplayName,
       description: videoData.description,
-      thumbnail: videoData.playerData?.thumb || "",
-      videoUrl: mp4Url || hlsUrl,
+      thumbnail: videoData.playerData?.thumb || videoData.thumb || "",
+      videoUrl: finalVideoUrl,
       downloadUrl: mp4Url,
-      isHls: !mp4Url && !!hlsUrl,
+      isHls: finalIsHls,
       transcript: mergedSentences,
+      isTranslationMissing,
+      needsTranscription: englishCues.length === 0
     });
   } catch (error: any) {
     console.error("TED Parser Error:", error);

@@ -2,11 +2,12 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import {
-  ChevronLeft, Play, Pause, Settings, Loader2, Sparkles, X,
+  ChevronLeft, Play, Pause, Settings, Loader2, Sparkles, X, Home,
   PlayCircle, Mic, FastForward, BookMarked, Sliders, Download,
   FileText, Video, FileCode, Check, Sun, Moon, ChevronDown, 
-  Book, FileEdit, Maximize, PictureInPicture, Volume, Volume1, Volume2,
+  Book, FileEdit, Maximize, PictureInPicture, Volume, Volume1, Volume2, Lock, LogOut, History as HistoryIcon
 } from "lucide-react";
 
 const GithubIcon = () => (
@@ -17,6 +18,7 @@ const GithubIcon = () => (
 import Hls from "hls.js";
 import LearningNotebook, { SavedSentence, VocabItem } from "@/components/LearningNotebook";
 import { useApp, LANGS } from "@/lib/i18n";
+import AuthModal from "@/components/AuthModal";
 
 interface TranscriptItem {
   id: number;
@@ -114,6 +116,10 @@ function WatchContent() {
   // Recording
   const [recordingId, setRecordingId] = useState<number | null>(null);
   const [audioUrls, setAudioUrls] = useState<Record<number, string>>({});
+  const [user, setUser] = useState<{ email: string; credits: number } | null>(null);
+  const [showAuth, setShowAuth] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyItems, setHistoryItems] = useState<any[]>([]);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
@@ -166,6 +172,9 @@ function WatchContent() {
     const fetchData = async () => {
       setLoading(true);
       try {
+        const uRes = await fetch("/api/auth/me");
+        if (uRes.ok) { const d = await uRes.json(); setUser(d.user); }
+
         const tedLangMap: Record<string, string> = {
           "zh": "zh-cn",
           "zh-tw": "zh-tw",
@@ -187,6 +196,12 @@ function WatchContent() {
       finally { setLoading(false); }
     };
     fetchData();
+
+    // Fetch history
+    fetch("/api/user/history").then(res => res.json()).then(hData => {
+      if (Array.isArray(hData)) setHistoryItems(hData);
+    }).catch(() => {});
+
   }, [videoUrlParam, router, lang]);
 
   /* ── HLS setup ─────────────────────────────────────────────── */
@@ -206,8 +221,32 @@ function WatchContent() {
     } else {
       video.src = data.videoUrl;
     }
-    return () => { if (hls) hls.destroy(); };
-  }, [data]);
+    
+    // 恢复之前的播放断点
+    const startProgress = searchParams.get("t");
+    if (startProgress && !isNaN(Number(startProgress))) {
+       video.currentTime = Number(startProgress);
+    }
+
+    return () => { 
+      if (hls) hls.destroy(); 
+      // 卸载时上报进度
+      if (user && video.currentTime > 0) {
+        fetch("/api/user/history", {
+           method: "POST",
+           headers: { "Content-Type": "application/json" },
+           body: JSON.stringify({
+             videoUrl: videoUrlParam,
+             title: data.title,
+             presenter: data.presenter,
+             progressTime: video.currentTime,
+             duration: video.duration
+           }),
+           keepalive: true // 确保跳转也能发出去
+         }).catch(() => {});
+      }
+    };
+  }, [data, user, videoUrlParam, searchParams]);
 
   /* ── Active index ──────────────────────────────────────────── */
   const findActiveIndex = useCallback(() => {
@@ -242,8 +281,27 @@ function WatchContent() {
   const togglePlay = () => {
     if (!videoRef.current) return;
     if (!hasInteracted) setHasInteracted(true);
-    if (videoRef.current.paused) { videoRef.current.play(); setIsPlaying(true); }
-    else { videoRef.current.pause(); setIsPlaying(false); }
+    if (videoRef.current.paused) { 
+      videoRef.current.play(); 
+      setIsPlaying(true); 
+    } else { 
+      videoRef.current.pause(); 
+      setIsPlaying(false);
+      // 上报断点进度
+      if (user && data) {
+         fetch("/api/user/history", {
+           method: "POST",
+           headers: { "Content-Type": "application/json" },
+           body: JSON.stringify({
+             videoUrl: videoUrlParam,
+             title: data.title,
+             presenter: data.presenter,
+             progressTime: videoRef.current.currentTime,
+             duration: videoRef.current.duration
+           })
+         }).catch(console.error);
+      }
+    }
   };
 
   const saveToVocab = (wordData: VocabItem) => {
@@ -297,9 +355,29 @@ function WatchContent() {
     if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
   };
 
+  const deductPoints = async (action: "WORD_LOOKUP" | "AI_ANALYZE" | "PDF_EXPORT") => {
+    if (!user) { setShowAuth(true); return false; }
+    try {
+      const res = await fetch("/api/user/credits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action })
+      });
+      const d = await res.json();
+      if (!res.ok) { alert(d.error || "Points issue"); return false; }
+      setUser(prev => prev ? ({ ...prev, credits: d.credits }) : null);
+      return true;
+    } catch { return false; }
+  };
+
   const handleDeepAnalyze = async (item: TranscriptItem, preloaded?: any) => {
     if (preloaded) { setAnalysisData(prev => ({ ...prev, [item.id]: preloaded })); return; }
     if (analysisData[item.id]) { const { [item.id]: _, ...rest } = analysisData; setAnalysisData(rest); return; }
+
+    if (!preloaded) {
+      if (! (await deductPoints("AI_ANALYZE")) ) return;
+    }
+
     videoRef.current?.pause(); setIsPlaying(false);
     setAnalysisLoading(item.id);
     try {
@@ -465,7 +543,10 @@ function WatchContent() {
 
               <div className="flex gap-4 mt-8">
                 <button onClick={() => setShowPrintModal(false)} className="flex-1 py-3 rounded-2xl text-sm font-bold transition-all hover:bg-white/5" style={{ color: "var(--text-3)" }}>{t.close}</button>
-                <button onClick={() => { setShowPrintModal(false); setTimeout(() => window.print(), 100); }} 
+                <button onClick={async () => { 
+                   if (! (await deductPoints("PDF_EXPORT")) ) return;
+                   setShowPrintModal(false); setTimeout(() => window.print(), 100); 
+                }} 
                    className="flex-[2] py-3 rounded-2xl text-sm font-black text-white shadow-xl transition-all hover:-translate-y-0.5 active:translate-y-0"
                    style={{ background: "var(--accent)", boxShadow: "0 10px 25px -5px rgba(230,43,30,0.4)" }}>
                    {t.confirmPrint}
@@ -478,15 +559,62 @@ function WatchContent() {
       {/* ── Header ─────────────────────────────────────────────── */}
       <header className="h-14 flex items-center gap-3 px-4 border-b shrink-0 print-hidden"
         style={{ background: "var(--bg-2)", borderColor: "var(--border)" }}>
-        <button onClick={() => router.push("/")} className="p-2 rounded-lg transition-colors"
+        <Link href="/" className="p-2 rounded-lg transition-colors"
           style={{ color: "var(--text-2)" }}
           onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
           onMouseLeave={e => (e.currentTarget.style.color = "var(--text-2)")}>
-          <ChevronLeft size={20} />
-        </button>
+          <Home size={20} />
+        </Link>
         <h1 className="flex-1 text-sm font-semibold truncate" style={{ color: "var(--text)" }}>{data?.title}</h1>
         <HeaderControls />
         <div className="w-px h-6 mx-1" style={{ background: "var(--border)" }} />
+        
+        {/* History Dropdown */}
+        <div className="relative">
+          <button onClick={() => setShowHistory(v => !v)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
+            style={{ background: showHistory ? "var(--bg-3)" : "transparent", color: "var(--text-2)" }}
+            onMouseEnter={e => !showHistory && (e.currentTarget.style.color = "var(--text)")}
+            onMouseLeave={e => !showHistory && (e.currentTarget.style.color = "var(--text-2)")}>
+            <HistoryIcon size={16} />{t.history}
+          </button>
+          
+          {showHistory && (
+             <div className="absolute top-full right-0 mt-2 w-72 rounded-2xl shadow-2xl z-[110] py-2 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+               style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}>
+               <div className="px-4 py-2 border-b border-white/5 mb-1">
+                  <p className="text-[10px] font-black uppercase tracking-widest opacity-30">{t.history}</p>
+               </div>
+               <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
+                  {historyItems.length === 0 ? (
+                    <div className="px-4 py-8 text-center opacity-30 text-xs">No recent history</div>
+                  ) : (
+                    historyItems.map((h, i) => (
+                      <button key={h.id} 
+                        onClick={() => {
+                          setShowHistory(false);
+                          router.push(`/watch?url=${encodeURIComponent(h.videoUrl)}&t=${Math.floor(h.progressTime)}`);
+                        }}
+                        className="w-full px-4 py-3 flex flex-col gap-1 text-left transition-colors hover:bg-white/5 border-b last:border-0 border-white/5 group"
+                        style={{ opacity: h.videoUrl === videoUrlParam ? 0.5 : 1 }}>
+                        <h4 className="text-[13px] font-bold line-clamp-1 group-hover:text-accent transition-colors">{h.title}</h4>
+                        <div className="flex items-center justify-between text-[10px] opacity-40">
+                           <span>{h.presenter}</span>
+                           <span>{Math.floor(h.progressTime / 60)}:{(Math.floor(h.progressTime % 60)).toString().padStart(2,'0')}</span>
+                        </div>
+                        {h.duration && (
+                          <div className="w-full h-0.5 bg-white/5 rounded-full overflow-hidden mt-1">
+                             <div className="h-full bg-accent/40" style={{ width: `${(h.progressTime / h.duration) * 100}%` }} />
+                          </div>
+                        )}
+                      </button>
+                    ))
+                  )}
+               </div>
+             </div>
+          )}
+        </div>
+
         {/* Vocab */}
         <button onClick={() => setShowVocab(v => !v)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
@@ -521,7 +649,56 @@ function WatchContent() {
             </div>
           )}
         </div>
+        {/* User / Credits */}
+        <div className="flex items-center gap-3 ml-2">
+           {user ? (
+             <div className="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-white/5 border border-white/5">
+                <div className="w-5 h-5 rounded-lg bg-accent flex items-center justify-center text-[10px] font-bold text-white shadow-lg shadow-accent/20">
+                   {user.email[0].toUpperCase()}
+                </div>
+                <div className="flex flex-col">
+                   <span className="text-[10px] font-black leading-none">{user.credits} PTS</span>
+                   <span className="text-[8px] opacity-40 uppercase tracking-widest">{t.balance || 'Credits'}</span>
+                </div>
+               <button onClick={() => { fetch("/api/auth/logout"); setUser(null); }} className="ml-2 opacity-30 hover:opacity-100 transition-opacity"><LogOut size={12} /></button>
+             </div>
+           ) : (
+             <button onClick={() => setShowAuth(true)} className="px-4 py-1.5 rounded-xl bg-accent text-white text-xs font-bold shadow-xl shadow-accent/20 hover:scale-105 active:scale-95 transition-all">
+                {t.login || "Sign In"}
+             </button>
+           )}
+        </div>
       </header>
+      
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} onSuccess={(u) => setUser(u)} />}
+
+      {/* Login Barrier for Watch Page - Absolute Cover */}
+      {!user && !loading && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 bg-black/70 backdrop-blur-xl" 
+          style={{ backgroundImage: "radial-gradient(circle at center, rgba(230,43,30,0.2) 0%, transparent 80%)" }}>
+           <div className="max-w-md w-full p-10 rounded-[3rem] bg-bg-2 border border-accent/20 text-center shadow-2xl space-y-8 animate-in fade-in zoom-in duration-300">
+              <div className="w-24 h-24 rounded-[2rem] bg-accent flex items-center justify-center mx-auto mb-4 shadow-2xl shadow-accent/40">
+                 <Lock size={40} className="text-white" />
+              </div>
+              <div className="space-y-3">
+                <h2 className="text-4xl font-black tracking-tight">{t.login || 'Unlocked Growth'}</h2>
+                <p className="text-sm opacity-60 leading-relaxed font-medium">Join 50k+ learners mastering English with TEDMaster. Create your free account to unlock analysis and shadow practicing.</p>
+              </div>
+              <div className="flex flex-col gap-3">
+                <button 
+                  onClick={() => setShowAuth(true)}
+                  className="w-full py-4.5 rounded-2xl bg-accent text-white font-black hover:scale-[1.02] active:scale-[0.98] shadow-2xl shadow-accent/30 transition-all text-sm">
+                  Register & Get 100 Free Credits
+                </button>
+                <button 
+                  onClick={() => setShowAuth(true)}
+                  className="w-full py-4 rounded-2xl bg-white/5 text-[10px] font-bold opacity-30 hover:opacity-100 transition-opacity">
+                  Already have an account? Sign In
+                </button>
+              </div>
+           </div>
+        </div>
+      )}
 
       {/* ── Main layout ────────────────────────────────────────── */}
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden print-hidden">
@@ -745,10 +922,11 @@ function WatchContent() {
                     <div className="flex-1">
                       <p className="leading-relaxed font-medium" style={{ fontSize: mainFontSize - 2, color: isActive ? "var(--text)" : "inherit" }}>
                         {item.english.split(" ").map((w, i) => (
-                          <span key={i} onClick={e => {
+                          <span key={i} onClick={async e => {
                             e.stopPropagation();
                             const clean = w.replace(/[^a-zA-Z'-]/g, "");
                             if (!clean) return;
+                            if (! (await deductPoints("WORD_LOOKUP")) ) return;
                             (async () => {
                               videoRef.current?.pause(); setIsPlaying(false);
                               setWordLoading(true);
