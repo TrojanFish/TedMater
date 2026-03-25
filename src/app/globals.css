@@ -66,19 +66,19 @@ body {
 /* ── Range input ─────────────────────────────────────────────── */
 input[type="range"] { accent-color: var(--accent); cursor: pointer; }
 
+.hidden-on-screen { display: none; }
+
 /* ── Print ────────────────────────────────────────────────────── */
 @media print {
-  html, body {
+  html, body, #__next, div[data-reactroot], .h-screen {
     height: auto !important;
+    min-height: 0 !important;
     overflow: visible !important;
     background: white !important;
     color: black !important;
-  }
-  body > div, #__next > div {
-    height: auto !important;
-    overflow: visible !important;
+    position: static !important;
   }
   .print-hidden { display: none !important; }
-  #print-view   { display: block !important; }
-  @page { margin: 15mm 20mm; size: A4; }
+  #print-view   { display: block !important; width: 100% !important; }
+  @page { margin: 15mm; size: A4; }
 }

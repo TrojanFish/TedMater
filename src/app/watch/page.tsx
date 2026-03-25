@@ -3,9 +3,10 @@
 import { useEffect, useState, useRef, useCallback, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
-  ChevronLeft, Play, Pause, Volume2, Settings, Loader2, Sparkles, X,
+  ChevronLeft, Play, Pause, Settings, Loader2, Sparkles, X,
   PlayCircle, Mic, FastForward, BookMarked, Sliders, Download,
-  FileText, Video, FileCode, Check, Sun, Moon, ChevronDown,
+  FileText, Video, FileCode, Check, Sun, Moon, ChevronDown, 
+  Book, FileEdit, Maximize, PictureInPicture, Volume, Volume1, Volume2,
 } from "lucide-react";
 
 const GithubIcon = () => (
@@ -14,7 +15,7 @@ const GithubIcon = () => (
   </svg>
 );
 import Hls from "hls.js";
-import VocabBook, { VocabItem } from "@/components/VocabBook";
+import LearningNotebook, { SavedSentence, VocabItem } from "@/components/LearningNotebook";
 import { useApp, LANGS } from "@/lib/i18n";
 
 interface TranscriptItem {
@@ -92,6 +93,9 @@ function WatchContent() {
   const [mainFontSize, setMainFontSize] = useState(18);
   const [subFontSize, setSubFontSize] = useState(13);
   const [subtitleOffset, setSubtitleOffset] = useState(0);
+  const [mainColor, setMainColor] = useState("#ffffff");
+  const [subColor, setSubColor] = useState("rgba(255,255,255,0.75)");
+  const [volume, setVolume] = useState(1);
 
   // AI
   const [activeWord, setActiveWord] = useState<VocabItem & { loading?: boolean } | null>(null);
@@ -99,7 +103,13 @@ function WatchContent() {
   const [analysisData, setAnalysisData] = useState<Record<number, { structureZh: string; breakdown: { label: string; content: string; explanation: string }[]; insights: { title: string; content: string }[] }>>({});
   const [analysisLoading, setAnalysisLoading] = useState<number | null>(null);
   const [vocabWords, setVocabWords] = useState<VocabItem[]>([]);
+  const [savedSentences, setSavedSentences] = useState<SavedSentence[]>([]);
   const [showVocab, setShowVocab] = useState(false);
+  const [notes, setNotes] = useState<Record<number, string>>({});
+  const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
+  const [noteInput, setNoteInput] = useState("");
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [printConfig, setPrintConfig] = useState({ vocab: true, script: true, analysis: true, notes: true });
 
   // Recording
   const [recordingId, setRecordingId] = useState<number | null>(null);
@@ -144,7 +154,14 @@ function WatchContent() {
     try {
       const saved = localStorage.getItem("tedmaster_vocab");
       if (saved) setVocabWords(JSON.parse(saved));
-    } catch { localStorage.removeItem("tedmaster_vocab"); }
+      const savedSents = localStorage.getItem("tedmaster_sentences");
+      if (savedSents) setSavedSentences(JSON.parse(savedSents));
+      const savedNotes = localStorage.getItem(`tm_notes_${videoUrlParam}`);
+      if (savedNotes) setNotes(JSON.parse(savedNotes));
+    } catch { 
+      localStorage.removeItem("tedmaster_vocab"); 
+      localStorage.removeItem("tedmaster_sentences");
+    }
 
     const fetchData = async () => {
       setLoading(true);
@@ -238,6 +255,29 @@ function WatchContent() {
     setActiveWord(null);
   };
 
+  const saveSentence = (item: TranscriptItem, analysis: any) => {
+    setSavedSentences(prev => {
+      const newList = [...prev.filter(i => i.id !== item.id), { 
+        id: item.id, 
+        english: item.english, 
+        translated: item.translated, 
+        analysis, 
+        addedAt: Date.now() 
+      }];
+      localStorage.setItem("tedmaster_sentences", JSON.stringify(newList));
+      return newList;
+    });
+  };
+
+  const handleSaveNote = (id: number) => {
+    setNotes(prev => {
+      const newNotes = { ...prev, [id]: noteInput };
+      localStorage.setItem(`tm_notes_${videoUrlParam}`, JSON.stringify(newNotes));
+      return newNotes;
+    });
+    setEditingNoteId(null);
+  };
+
   const startRecording = async (id: number) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -257,7 +297,8 @@ function WatchContent() {
     if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
   };
 
-  const handleDeepAnalyze = async (item: TranscriptItem) => {
+  const handleDeepAnalyze = async (item: TranscriptItem, preloaded?: any) => {
+    if (preloaded) { setAnalysisData(prev => ({ ...prev, [item.id]: preloaded })); return; }
     if (analysisData[item.id]) { const { [item.id]: _, ...rest } = analysisData; setAnalysisData(rest); return; }
     videoRef.current?.pause(); setIsPlaying(false);
     setAnalysisLoading(item.id);
@@ -291,8 +332,148 @@ function WatchContent() {
   const printStyle = `@media print { html,body{height:auto!important;overflow:visible!important;background:white!important;color:black!important} body>div,#__next>div{height:auto!important;overflow:visible!important} .print-hidden{display:none!important} #print-view{display:block!important} @page{margin:15mm 20mm;size:A4} }`;
 
   return (
-    <div className="h-screen flex flex-col print-hidden" style={{ background: "var(--bg)", color: "var(--text)" }}>
-      <style>{printStyle}</style>
+    <div className="h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
+
+      {/* ── Print view ── */}
+      <div id="print-view" className="hidden-on-screen bg-white text-black w-full font-sans">
+        <div style={{ borderBottom: "4px solid #E62B1E", paddingBottom: "10px", marginBottom: "14px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={{ fontSize: "9px", fontWeight: 900, letterSpacing: "0.2em", textTransform: "uppercase", color: "#E62B1E", marginBottom: "3px" }}>TEDMaster · Learning Script</div>
+              <div style={{ fontSize: "16px", fontWeight: 900 }}>{data?.title}</div>
+              <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>{data?.presenter}</div>
+            </div>
+            <div style={{ fontSize: "9px", color: "#aaa", textAlign: "right" }}>
+              <div>{new Date().toLocaleDateString()}</div>
+              <div>{data?.transcript?.length} sentences</div>
+            </div>
+          </div>
+        </div>
+        <div>
+          {printConfig.vocab && vocabWords.length > 0 && (
+            <div style={{ marginBottom: "20px", borderBottom: "1px dashed #eee", paddingBottom: "15px" }}>
+               <h4 style={{ fontSize: "10px", fontWeight: 900, textTransform: "uppercase", color: "#E62B1E", marginBottom: "8px" }}>Vocabulary List</h4>
+               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                  {vocabWords.map((v, i) => (
+                    <div key={i} style={{ fontSize: "9px", border: "1px solid #f5f5f5", padding: "6px", borderRadius: "4px" }}>
+                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                         <span style={{ fontWeight: 700 }}>{v.word}</span>
+                         <span style={{ color: "#aaa" }}>{v.partOfSpeech}</span>
+                       </div>
+                       <div style={{ color: "#666" }}>{v.definitionZh}</div>
+                    </div>
+                  ))}
+               </div>
+            </div>
+          )}
+
+          {printConfig.script && data?.transcript?.map((item, i) => (
+            <div key={i} style={{ display: "flex", gap: "8px", padding: "4px 0", borderBottom: "1px solid #f0f0f0", pageBreakInside: "avoid", breakInside: "avoid" }}>
+              <span style={{ fontSize: "8px", color: "#ccc", fontFamily: "monospace", width: "20px", flexShrink: 0, paddingTop: "2px", textAlign: "right" }}>{i + 1}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: "11px", lineHeight: 1.5, color: "#111", fontWeight: 500 }}>{item.english}</div>
+                {item.translated && <div style={{ fontSize: "10px", lineHeight: 1.4, color: "#888", marginTop: "1px" }}>{item.translated}</div>}
+                
+                {printConfig.analysis && (analysisData[item.id] || savedSentences.find(s => s.id === item.id)?.analysis) && (
+                   (() => {
+                     const analysis = analysisData[item.id] || savedSentences.find(s => s.id === item.id)?.analysis;
+                     return (
+                       <div style={{ marginTop: "6px", padding: "8px", background: "#f8f9fa", border: "1px solid #e9ecef", borderRadius: "6px" }}>
+                          <div style={{ fontSize: "9px", fontWeight: 700, color: "#E62B1E", textTransform: "uppercase", marginBottom: "4px", display: "flex", alignItems: "center", gap: "4px" }}>
+                            <Sparkles size={8} /> AI Structure Analysis
+                          </div>
+                          <div style={{ fontSize: "10px", color: "#333", fontStyle: "italic", marginBottom: "6px" }}>{analysis.structureZh}</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "2px" }}>
+                             {analysis.breakdown?.map((b: any, bi: number) => (
+                               <div key={bi} style={{ display: "flex", gap: "6px", fontSize: "9px", borderLeft: "2px solid #E62B1E", paddingLeft: "6px" }}>
+                                  <span style={{ fontWeight: 800, color: "#E62B1E", flexShrink: 0 }}>{b.label}</span>
+                                  <span style={{ color: "#555" }}>{b.content}</span>
+                               </div>
+                             ))}
+                          </div>
+                          {analysis.insights?.length > 0 && (
+                            <div style={{ marginTop: "8px", paddingTop: "6px", borderTop: "1px dashed #ddd" }}>
+                               <div style={{ fontSize: "8px", fontWeight: 700, color: "#666", textTransform: "uppercase", marginBottom: "4px" }}>Insights</div>
+                               <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "4px" }}>
+                                  {analysis.insights.map((ins: any, ii: number) => (
+                                    <div key={ii} style={{ fontSize: "9px" }}>
+                                       <span style={{ fontWeight: 700, color: "#333" }}>{ins.title}: </span>
+                                       <span style={{ color: "#666" }}>{ins.content}</span>
+                                    </div>
+                                  ))}
+                               </div>
+                            </div>
+                          )}
+                       </div>
+                     );
+                   })()
+                )}
+
+                {printConfig.notes && notes[item.id] && (
+                  <div style={{ fontSize: "10px", color: "#E62B1E", fontStyle: "italic", marginTop: "4px", padding: "4px 8px", background: "#fdf2f2", borderRadius: "4px", borderLeft: "2px solid #E62B1E" }}>
+                    Note: {notes[item.id]}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: "16px", paddingTop: "8px", borderTop: "1px solid #eee", display: "flex", justifyContent: "space-between", fontSize: "8px", color: "#bbb" }}>
+          <span>{data?.title}</span><span>TEDMaster · AI-Powered English Learning</span>
+        </div>
+      </div>
+
+      {showPrintModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }} onClick={() => setShowPrintModal(false)}>
+           <div className="w-full max-w-sm rounded-3xl shadow-2xl p-7" style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }} onClick={e => e.stopPropagation()}>
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: "var(--accent-s)" }}>
+                   <Download size={20} style={{ color: "var(--accent)" }} />
+                </div>
+                <div>
+                   <h3 className="text-xl font-bold">{t.exportConfig}</h3>
+                   <p className="text-[11px] opacity-40">Customize your learning PDF</p>
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                 {[
+                   { id: "vocab", label: t.includeVocab, count: vocabWords.length, icon: <Book size={14} /> },
+                   { id: "script", label: t.includeScript, count: data?.transcript.length, icon: <FileText size={14} /> },
+                   { id: "analysis", label: t.includeAnalysis, count: Object.keys(analysisData).length || savedSentences.length, icon: <Sparkles size={14} /> },
+                   { id: "notes", label: t.includeNotes, count: Object.values(notes).filter(Boolean).length, icon: <FileEdit size={14} /> }
+                 ].map(opt => (
+                   <label key={opt.id} className="flex items-center justify-between p-4 rounded-2xl cursor-pointer transition-all border border-transparent hover:border-accent/20"
+                     style={{ background: "var(--bg-3)" }}>
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-white/5 opacity-60">{opt.icon}</div>
+                        <span className="text-sm font-semibold">{opt.label}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                         <span className="text-[10px] font-mono opacity-30">{opt.count}</span>
+                         <input type="checkbox" checked={(printConfig as any)[opt.id]} onChange={e => setPrintConfig(prev => ({ ...prev, [opt.id]: e.target.checked }))} 
+                           className="w-5 h-5 rounded-lg appearance-none cursor-pointer transition-all border-2" 
+                           style={{ 
+                             accentColor: "var(--accent)", 
+                             borderColor: (printConfig as any)[opt.id] ? "var(--accent)" : "rgba(255,255,255,0.1)",
+                             background: (printConfig as any)[opt.id] ? "var(--accent)" : "transparent"
+                           }} />
+                      </div>
+                   </label>
+                 ))}
+              </div>
+
+              <div className="flex gap-4 mt-8">
+                <button onClick={() => setShowPrintModal(false)} className="flex-1 py-3 rounded-2xl text-sm font-bold transition-all hover:bg-white/5" style={{ color: "var(--text-3)" }}>{t.close}</button>
+                <button onClick={() => { setShowPrintModal(false); setTimeout(() => window.print(), 100); }} 
+                   className="flex-[2] py-3 rounded-2xl text-sm font-black text-white shadow-xl transition-all hover:-translate-y-0.5 active:translate-y-0"
+                   style={{ background: "var(--accent)", boxShadow: "0 10px 25px -5px rgba(230,43,30,0.4)" }}>
+                   {t.confirmPrint}
+                </button>
+              </div>
+           </div>
+        </div>
+      )}
 
       {/* ── Header ─────────────────────────────────────────────── */}
       <header className="h-14 flex items-center gap-3 px-4 border-b shrink-0 print-hidden"
@@ -325,7 +506,7 @@ function WatchContent() {
               style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}>
               {[
                 { icon: <Video size={15} />, label: t.downloadVideo, action: () => { if (data?.downloadUrl) { const a = document.createElement("a"); a.href = data.downloadUrl; a.download = `${data.title}.mp4`; a.target = "_blank"; a.click(); } setShowExportMenu(false); }, disabled: !data?.downloadUrl },
-                { icon: <FileText size={15} />, label: t.exportPdf, action: () => { setShowExportMenu(false); window.print(); }, disabled: false },
+                { icon: <FileText size={15} />, label: t.exportPdf, action: () => { setShowExportMenu(false); setShowPrintModal(true); }, disabled: false },
                 { icon: <FileCode size={15} />, label: t.exportSrt, action: exportSRT, disabled: false },
               ].map((item, i) => (
                 <button key={i} onClick={item.disabled ? undefined : item.action} disabled={item.disabled}
@@ -345,12 +526,38 @@ function WatchContent() {
       {/* ── Main layout ────────────────────────────────────────── */}
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden print-hidden">
 
-        {/* Vocab overlay */}
+        {/* Notebook overlay */}
         {showVocab && (
           <div className="absolute top-14 right-0 w-80 bottom-0 z-50 p-3">
-            <VocabBook words={vocabWords}
-              onRemove={w => setVocabWords(prev => { const next = prev.filter(i => i.word !== w); localStorage.setItem("tedmaster_vocab", JSON.stringify(next)); return next; })}
-              onSelect={word => { videoRef.current?.pause(); setIsPlaying(false); setActiveWord(word); }} />
+            <LearningNotebook 
+              words={vocabWords}
+              sentences={savedSentences}
+              notes={notes}
+              onRemoveWord={w => setVocabWords(prev => { 
+                const next = prev.filter(i => i.word !== w); 
+                localStorage.setItem("tedmaster_vocab", JSON.stringify(next)); 
+                return next; 
+              })}
+              onRemoveSentence={id => setSavedSentences(prev => {
+                const next = prev.filter(i => i.id !== id);
+                localStorage.setItem("tedmaster_sentences", JSON.stringify(next));
+                return next;
+              })}
+              onSelectWord={word => { videoRef.current?.pause(); setIsPlaying(false); setActiveWord(word); }}
+              onSelectSentence={sent => {
+                if (videoRef.current) {
+                  if (typeof sent.id === "number") {
+                    const item = data?.transcript.find(t => t.id === sent.id);
+                    if (item) { videoRef.current.currentTime = (item.startTime - subtitleOffset) / 1000; videoRef.current.play(); setIsPlaying(true); }
+                  }
+                  handleDeepAnalyze({ id: sent.id as number, english: sent.english, translated: sent.translated, startTime: 0 }, sent.analysis);
+                }
+              }}
+              onSelectNote={id => {
+                const item = data?.transcript.find(t => t.id === id);
+                if (item && videoRef.current) { videoRef.current.currentTime = (item.startTime - subtitleOffset) / 1000; videoRef.current.play(); setIsPlaying(true); }
+              }}
+            />
           </div>
         )}
 
@@ -368,12 +575,12 @@ function WatchContent() {
             />
             {/* Subtitle overlay */}
             {hasInteracted && activeItem && (
-              <div className="absolute bottom-4 left-0 right-0 px-8 text-center pointer-events-none">
-                <p className="font-semibold leading-snug drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]"
-                  style={{ fontSize: mainFontSize, color: "#fff" }}>{activeItem.english}</p>
+              <div className="absolute bottom-6 left-0 right-0 px-8 text-center pointer-events-none">
+                <p className="font-bold leading-snug drop-shadow-[0_2px_12px_rgba(0,0,0,1)]"
+                  style={{ fontSize: mainFontSize, color: mainColor }}>{activeItem.english}</p>
                 {activeItem.translated && (
-                  <p className="mt-1 drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]"
-                    style={{ fontSize: subFontSize, color: "rgba(255,255,255,0.75)" }}>{activeItem.translated}</p>
+                  <p className="mt-1 font-medium drop-shadow-[0_2px_8px_rgba(0,0,0,1)]"
+                    style={{ fontSize: subFontSize, color: subColor }}>{activeItem.translated}</p>
                 )}
               </div>
             )}
@@ -389,7 +596,7 @@ function WatchContent() {
           </div>
 
           {/* Controls */}
-          <div className="shrink-0 px-4 pb-4 pt-3" style={{ background: "rgba(0,0,0,0.85)" }}>
+          <div className="shrink-0 px-4 pb-4 pt-3 relative z-30" style={{ background: "rgba(0,0,0,0.85)" }}>
             {/* Progress bar */}
             <div className="relative h-5 flex items-center mb-3 group/seek">
               <div className="absolute inset-y-0 left-0 right-0 flex items-center">
@@ -407,6 +614,16 @@ function WatchContent() {
                 <button onClick={togglePlay} className="text-white">
                   {isPlaying ? <Pause size={22} fill="white" /> : <Play size={22} fill="white" />}
                 </button>
+                {/* Volume Control */}
+                <div className="flex items-center group/vol gap-2">
+                   <button onClick={() => { const nv = volume > 0 ? 0 : 1; setVolume(nv); if (videoRef.current) videoRef.current.volume = nv; }} 
+                     className="p-1 rounded hover:bg-white/10 transition-colors text-white/70 hover:text-white">
+                     {volume === 0 ? <Volume size={18} /> : volume < 0.5 ? <Volume1 size={18} /> : <Volume2 size={18} />}
+                   </button>
+                   <input type="range" min="0" max="1" step="0.01" value={volume} 
+                     onChange={e => { const v = parseFloat(e.target.value); setVolume(v); if (videoRef.current) videoRef.current.volume = v; }}
+                     className="w-0 group-hover/vol:w-20 transition-all overflow-hidden h-1 cursor-pointer accent-white" />
+                </div>
                 <span className="text-xs font-mono" style={{ color: "rgba(255,255,255,0.5)" }}>
                   {formatTime(currentTime)} / {formatTime(duration)}
                 </span>
@@ -414,13 +631,13 @@ function WatchContent() {
               <div className="flex items-center gap-2">
                 {/* Speed */}
                 <div className="relative">
-                  <button onClick={() => { setShowSpeedMenu(v => !v); setShowSettings(false); }}
+                  <button onClick={() => { if (!hasInteracted) setHasInteracted(true); setShowSpeedMenu(v => !v); setShowSettings(false); }}
                     className="px-3 py-1 rounded text-xs font-bold border transition-all"
                     style={{ color: showSpeedMenu ? "var(--accent)" : "rgba(255,255,255,0.6)", borderColor: showSpeedMenu ? "var(--accent)" : "rgba(255,255,255,0.2)" }}>
                     {playbackRate}×
                   </button>
                   {showSpeedMenu && (
-                    <div className="absolute bottom-full mb-2 right-0 rounded-xl overflow-hidden shadow-xl"
+                    <div className="absolute bottom-full mb-2 right-0 rounded-xl overflow-hidden shadow-2xl z-50 w-24"
                       style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}>
                       {SPEEDS.map(r => (
                         <button key={r} onClick={() => { if (videoRef.current) videoRef.current.playbackRate = r; setPlaybackRate(r); setShowSpeedMenu(false); }}
@@ -434,15 +651,22 @@ function WatchContent() {
                     </div>
                   )}
                 </div>
+                {/* Fullscreen & PiP */}
+                <button onClick={() => videoRef.current?.requestPictureInPicture()} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-white/50 hover:text-white" title={t.pip}>
+                  <PictureInPicture size={18} />
+                </button>
+                <button onClick={() => videoRef.current?.requestFullscreen()} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-white/50 hover:text-white" title={t.fullscreen}>
+                  <Maximize size={18} />
+                </button>
                 {/* Settings */}
                 <div className="relative">
-                  <button onClick={() => { setShowSettings(v => !v); setShowSpeedMenu(false); }}
+                  <button onClick={() => { if (!hasInteracted) setHasInteracted(true); setShowSettings(v => !v); setShowSpeedMenu(false); }}
                     className="p-1.5 rounded transition-colors"
                     style={{ color: showSettings ? "var(--accent)" : "rgba(255,255,255,0.6)" }}>
                     <Settings size={18} />
                   </button>
                   {showSettings && (
-                    <div className="absolute bottom-full mb-3 right-0 rounded-xl p-5 shadow-xl w-72 space-y-5"
+                    <div className="absolute bottom-full mb-3 right-0 rounded-xl p-5 shadow-2xl w-72 space-y-5 z-50"
                       style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}
                       onClick={e => e.stopPropagation()}>
                       <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--accent)" }}><Sliders size={12} className="inline mr-1" />{t.settings}</p>
@@ -460,9 +684,31 @@ function WatchContent() {
                       <div className="space-y-1.5">
                         <div className="flex justify-between text-xs" style={{ color: "var(--text-2)" }}>
                           <span><FastForward size={11} className="inline mr-1" />{t.syncOffset}</span>
-                          <span>{subtitleOffset > 0 ? "+" : ""}{subtitleOffset}ms</span>
+                          <span>{subtitleOffset > 0 ? "+" : ""}{(subtitleOffset / 1000).toFixed(1)}s</span>
                         </div>
-                        <input type="range" min={-3000} max={3000} step={100} value={subtitleOffset} onChange={e => setSubtitleOffset(Number(e.target.value))} className="w-full" />
+                        <input type="range" min={-5000} max={5000} step={100} value={subtitleOffset} onChange={e => setSubtitleOffset(Number(e.target.value))} className="w-full" />
+                      </div>
+
+                      {/* Color Settings */}
+                      <div className="grid grid-cols-2 gap-4">
+                         <div>
+                            <p className="text-[10px] uppercase font-bold text-white/40 mb-2">{t.mainColor}</p>
+                            <div className="flex gap-2">
+                               {["#ffffff", "#ffd700", "#00ff00", "#00d4ff"].map(c => (
+                                 <button key={c} onClick={() => setMainColor(c)} className="w-5 h-5 rounded-full border border-white/10 transition-transform active:scale-95" 
+                                   style={{ background: c, outline: mainColor === c ? "2px solid var(--accent)" : "none", outlineOffset: "1px" }} />
+                               ))}
+                            </div>
+                         </div>
+                         <div>
+                            <p className="text-[10px] uppercase font-bold text-white/40 mb-2">{t.subColor}</p>
+                            <div className="flex gap-2">
+                               {["rgba(255,255,255,0.75)", "rgba(255,215,0,0.7)", "rgba(0,255,0,0.7)", "#cccccc"].map(c => (
+                                 <button key={c} onClick={() => setSubColor(c)} className="w-5 h-5 rounded-full border border-white/10 transition-transform active:scale-95" 
+                                   style={{ background: c, outline: subColor === c ? "2px solid var(--accent)" : "none", outlineOffset: "1px" }} />
+                               ))}
+                            </div>
+                         </div>
                       </div>
                     </div>
                   )}
@@ -538,14 +784,46 @@ function WatchContent() {
                       {t.analyzeBtn}
                     </button>
                     <button onClick={e => { e.stopPropagation(); recordingId === item.id ? stopRecording() : startRecording(item.id); }}
-                      className="p-1.5 rounded-lg transition-all"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
                       style={{ background: recordingId === item.id ? "var(--accent)" : "var(--bg-3)", color: recordingId === item.id ? "#fff" : "var(--text-2)" }}>
                       <Mic size={13} />
+                      {recordingId === item.id ? t.recording : t.recordBtn}
+                    </button>
+                    <button onClick={e => { e.stopPropagation(); setEditingNoteId(editingNoteId === item.id ? null : item.id); setNoteInput(notes[item.id] || ""); }}
+                      className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all"
+                      style={{ background: notes[item.id] ? "var(--accent-s)" : "var(--bg-3)", color: notes[item.id] ? "var(--accent)" : "var(--text-2)" }}>
+                      <FileText size={13} />
+                      {notes[item.id] ? t.note : t.addNote}
                     </button>
                     {audioUrls[item.id] && (
                       <audio src={audioUrls[item.id]} controls className="h-6" style={{ maxWidth: "140px" }} />
                     )}
                   </div>
+
+                  {/* Note Editor */}
+                  {editingNoteId === item.id && (
+                    <div className="mt-2 ml-8 space-y-2 p-3 rounded-xl card" onClick={e => e.stopPropagation()}>
+                      <textarea
+                        autoFocus
+                        value={noteInput}
+                        onChange={e => setNoteInput(e.target.value)}
+                        placeholder={t.notePlaceholder}
+                        className="w-full bg-transparent border-none outline-none text-xs resize-none min-h-[60px]"
+                        style={{ color: "var(--text)" }}
+                      />
+                      <div className="flex justify-end gap-2">
+                         <button onClick={() => setEditingNoteId(null)} className="px-3 py-1 text-[10px] font-bold opacity-40">{t.close}</button>
+                         <button onClick={() => handleSaveNote(item.id)} className="px-3 py-1 rounded-lg text-[10px] font-bold text-white" style={{ background: "var(--accent)" }}>{t.saveNote}</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Note Display (not editing) */}
+                  {notes[item.id] && editingNoteId !== item.id && (
+                    <div className="mt-2 ml-8 p-3 rounded-xl card opacity-80 border-l-2 bg-accent-s" style={{ borderLeftColor: "var(--accent)" }}>
+                       <p className="text-[11px] italic" style={{ color: "var(--text-2)" }}>{notes[item.id]}</p>
+                    </div>
+                  )}
 
                   {/* Analysis panel */}
                   {analysisData[item.id] && (
@@ -565,9 +843,16 @@ function WatchContent() {
                           </div>
                         ))}
                       </div>
-                      {analysisData[item.id].insights?.length > 0 && (
-                        <div className="pt-3 border-t space-y-2" style={{ borderColor: "var(--border)" }}>
+                        <div className="pt-3 border-t flex items-center justify-between" style={{ borderColor: "var(--border)" }}>
                           <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--accent)" }}>{t.insights}</p>
+                          <button onClick={e => { e.stopPropagation(); saveSentence(item, analysisData[item.id]); }}
+                             className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold text-white transition-all"
+                             style={{ background: savedSentences.some(s => s.id === item.id) ? "var(--text-3)" : "var(--accent)" }}>
+                             <BookMarked size={11} />
+                             {savedSentences.some(s => s.id === item.id) ? "SAVED" : t.saveSentence}
+                          </button>
+                        </div>
+                        <div className="space-y-2">
                           {analysisData[item.id].insights.map((ins, i) => (
                             <div key={i} className="text-xs space-y-0.5">
                               <p className="font-semibold" style={{ color: "var(--text)" }}>{ins.title}</p>
@@ -575,12 +860,11 @@ function WatchContent() {
                             </div>
                           ))}
                         </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
           </div>
         </section>
       </main>
@@ -684,36 +968,6 @@ function WatchContent() {
         </div>
       )}
 
-      {/* ── Print view ─────────────────────────────────────────── */}
-      <div id="print-view" className="hidden bg-white text-black w-full font-sans">
-        <div style={{ borderBottom: "4px solid #E62B1E", paddingBottom: "10px", marginBottom: "14px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div>
-              <div style={{ fontSize: "9px", fontWeight: 900, letterSpacing: "0.2em", textTransform: "uppercase", color: "#E62B1E", marginBottom: "3px" }}>TEDMaster · Learning Script</div>
-              <div style={{ fontSize: "16px", fontWeight: 900 }}>{data?.title}</div>
-              <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>{data?.presenter}</div>
-            </div>
-            <div style={{ fontSize: "9px", color: "#aaa", textAlign: "right" }}>
-              <div>{new Date().toLocaleDateString()}</div>
-              <div>{data?.transcript?.length} sentences</div>
-            </div>
-          </div>
-        </div>
-        <div>
-          {data?.transcript?.map((item, i) => (
-            <div key={item.id} style={{ display: "flex", gap: "8px", padding: "4px 0", borderBottom: "1px solid #f0f0f0", pageBreakInside: "avoid", breakInside: "avoid" }}>
-              <span style={{ fontSize: "8px", color: "#ccc", fontFamily: "monospace", width: "20px", flexShrink: 0, paddingTop: "2px", textAlign: "right" }}>{i + 1}</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: "11px", lineHeight: 1.5, color: "#111", fontWeight: 500 }}>{item.english}</div>
-                {item.translated && <div style={{ fontSize: "10px", lineHeight: 1.4, color: "#888", marginTop: "1px" }}>{item.translated}</div>}
-              </div>
-            </div>
-          ))}
-        </div>
-        <div style={{ marginTop: "16px", paddingTop: "8px", borderTop: "1px solid #eee", display: "flex", justifyContent: "space-between", fontSize: "8px", color: "#bbb" }}>
-          <span>{data?.title}</span><span>TEDMaster · AI-Powered English Learning</span>
-        </div>
-      </div>
     </div>
   );
 }
