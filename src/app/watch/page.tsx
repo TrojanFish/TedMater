@@ -996,11 +996,12 @@ function WatchContent() {
         </div>
       )}
 
-      <main className="flex-1 flex flex-col lg:flex-row gap-6 p-4 sm:p-8 relative z-10 lg:h-[calc(100vh-140px)] overflow-hidden print-hidden">
+      <main className="flex-1 flex flex-col lg:flex-row gap-6 p-4 sm:p-8 relative z-10 
+        lg:h-[calc(100vh-140px)] lg:overflow-hidden print-hidden">
 
         {/* ── Video player ─────────────────────────────────────── */}
-        <section className="flex-[3] flex flex-col gap-4 min-w-0 h-full">
-          <div className="card-sticker bg-black p-0 overflow-hidden shadow-pop-lg h-full hover:transform-none animate-in fade-in slide-in-from-left-8 duration-500">
+        <section className="flex-[3] flex flex-col gap-4 min-w-0 h-full sticky top-24 lg:static z-30 bg-background/50 backdrop-blur-sm lg:bg-transparent lg:backdrop-blur-none">
+          <div className="card-sticker bg-black p-0 overflow-hidden shadow-pop-lg h-full active:shadow-pop hover:transform-none animate-in fade-in slide-in-from-left-8 duration-500">
             {/* Video */}
             <div className="aspect-video relative flex items-center justify-center bg-black">
               <video
