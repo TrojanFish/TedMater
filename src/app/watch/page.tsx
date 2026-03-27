@@ -1335,9 +1335,9 @@ function WatchContent() {
 
         {/* ── AI Analysis panel (Drawer-like overlay) ───────────────────── */}
         {analysisPanelId !== null && analysisData[analysisPanelId] && (
-          <div className="fixed inset-y-0 right-0 w-[500px] max-w-full z-[120] animate-in slide-in-from-right duration-500 shadow-pop-lg">
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setAnalysisPanelId(null)} />
-            <div className="relative h-full bg-white border-l-4 border-border flex flex-col">
+          <div className="fixed inset-y-0 right-0 w-[480px] max-w-full z-[210] animate-in slide-in-from-right duration-500 shadow-pop-lg">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-md" onClick={() => setAnalysisPanelId(null)} />
+            <div className="relative h-full bg-white border-l-4 border-border flex flex-col shadow-[-20px_0_50px_-12px_rgba(0,0,0,0.15)]">
               <AIAnalysisPanel
                 analysis={analysisData[analysisPanelId]}
                 sentence={data?.transcript.find(i => i.id === analysisPanelId)}
