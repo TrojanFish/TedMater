@@ -18,8 +18,8 @@ export async function POST(req: Request) {
   const res = NextResponse.json({ ok: true });
   res.cookies.set("ted_admin", token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
+    secure: process.env.NODE_ENV === "production" && req.url.startsWith("https"),
+    sameSite: "lax",
     maxAge: 60 * 60 * 8,
     path: "/",
   });

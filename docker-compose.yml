@@ -37,6 +37,7 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - JWT_SECRET=${JWT_SECRET}
       - DATABASE_URL=postgresql://tedmaster:${POSTGRES_PASSWORD}@postgres:5432/tedmaster?connection_limit=10&pool_timeout=30
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - NODE_ENV=production
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/"]
