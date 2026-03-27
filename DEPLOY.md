@@ -62,7 +62,7 @@ sudo ufw allow OpenSSH
 sudo ufw allow 'Nginx Full'   # ports 80 + 443
 sudo ufw enable
 sudo ufw status
-# Port 3000 must NOT be exposed publicly — Nginx proxies to it internally
+# Port 3005 must NOT be exposed publicly — Nginx proxies to it internally
 ```
 
 ---
@@ -147,7 +147,7 @@ docker compose ps
 docker compose logs -f tedmaster   # Ctrl+C to exit
 ```
 
-The app is now listening on `http://localhost:3000` (not yet publicly accessible).
+The app is now listening on `http://localhost:3005` (not yet publicly accessible).
 
 ---
 
@@ -193,7 +193,7 @@ server {
     client_max_body_size 50M;
 
     location / {
-        proxy_pass         http://localhost:3000;
+        proxy_pass         http://localhost:3005;
         proxy_http_version 1.1;
         proxy_set_header   Upgrade $http_upgrade;
         proxy_set_header   Connection 'upgrade';
