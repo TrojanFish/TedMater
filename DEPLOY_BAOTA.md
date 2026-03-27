@@ -91,11 +91,27 @@ npm run build
 
 ## 核心配置参数说明 (.env)
 
-| 参数 | 说明 |
-| :--- | :--- |
-| `GEMINI_API_KEY` | 获取地址: [Google AI Studio](https://aistudio.google.com/app/apikey) |
-| `JWT_SECRET` | 建议使用随机 64 位字符 (可用 `openssl rand -hex 32` 生成) |
-| `DATABASE_URL` | 如果是本地 Postgres，通常为 `postgresql://postgres:密码@localhost:5432/tedmaster` |
+项目目录下必须存在 `.env` 文件。如果不存在，请先执行 `cp .env.example .env`。
+
+### 1. `GEMINI_API_KEY` (AI 秘钥)
+- **作用**：用于视频解析、翻译及学习建议生成。
+- **获取地址**：[Google AI Studio](https://aistudio.google.com/app/apikey)
+
+### 2. `JWT_SECRET` (身份验证密钥)
+- **作用**：用于加密用户登录 Token。
+- **获取方法**：执行以下命令生成随机 64 位字符并粘帖：
+  ```bash
+  openssl rand -hex 32
+  ```
+- **填写示例**：`JWT_SECRET=8b74... (填入你生成的长字符串)`
+
+### 3. `DATABASE_URL` (数据库连接地址)
+> **注意**：如果您使用的是 **方式一 (Docker)**，通常只需在 `.env` 中设置 `POSTGRES_PASSWORD` 即可。如果是 **方式二 (手动部署)**，则必须填写此项：
+- **组合格式**：`postgresql://用户名:密码@127.0.0.1:5432/数据库名`
+- **操作步骤**：
+  1. 在宝塔面板 **PostgreSQL管理器** 插件中添加数据库。
+  2. 获取刚才设置的 **用户名**、**密码** 及 **数据库名**。
+  3. **注意特殊字符**：如果密码包含 `@`, `:`, `/` 等符号，必须进行 URL 编码（例如 `@` 编码为 `%40`）。建议使用纯数字+字母的密码。
 
 ---
 
