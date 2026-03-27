@@ -88,6 +88,10 @@ const T = {
     continueLearning: "Continue Learning",
     tryExample: "Try an example",
     register: "Register",
+    searchPlaceholder: "Search TED talks by title or speaker, or paste a URL...",
+    searching: "Searching...",
+    noSearchResults: "No results found. Try different keywords.",
+    searchResultsLabel: "Search results",
   },
   zh: {
     appName: "TEDMaster",
@@ -171,6 +175,10 @@ const T = {
     continueLearning: "继续学习",
     tryExample: "快速体验",
     register: "注册",
+    searchPlaceholder: "搜索 TED 演讲标题或演讲者，或直接粘贴链接...",
+    searching: "搜索中...",
+    noSearchResults: "未找到相关演讲，请换个关键词试试。",
+    searchResultsLabel: "搜索结果",
   },
   "zh-tw": {
     appName: "TEDMaster",
@@ -254,6 +262,10 @@ const T = {
     continueLearning: "繼續學習",
     tryExample: "快速體驗",
     register: "注冊",
+    searchPlaceholder: "搜索 TED 演講標題或演講者，或直接貼上連結...",
+    searching: "搜索中...",
+    noSearchResults: "未找到相關演講，請換個關鍵詞試試。",
+    searchResultsLabel: "搜索結果",
   },
   ja: {
     appName: "TEDMaster",
@@ -337,6 +349,10 @@ const T = {
     continueLearning: "学習を続ける",
     tryExample: "サンプルを試す",
     register: "登録",
+    searchPlaceholder: "TEDトークのタイトル・スピーカーを検索、またはURLを貼り付け...",
+    searching: "検索中...",
+    noSearchResults: "結果が見つかりません。別のキーワードをお試しください。",
+    searchResultsLabel: "検索結果",
   },
 } as const;
 
