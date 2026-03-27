@@ -675,7 +675,7 @@ function WatchContent() {
       setLastActiveIndex(activeIndex);
       rowVirtualizer.scrollToIndex(activeIndex, { align: "center", behavior: "smooth" });
     }
-  }, [activeIndex, lastActiveIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeIndex, lastActiveIndex, rowVirtualizer]);
 
   /* ── Helpers ───────────────────────────────────────────────── */
   const formatTime = (ms: number) => {
@@ -1194,7 +1194,7 @@ function WatchContent() {
         </section>
 
         {/* ── Transcript panel ──────────────────────────────────── */}
-        <section className="flex-[2] flex flex-col gap-4 min-w-0 h-full overflow-hidden">
+        <section className="flex-[2] flex flex-col gap-4 min-w-0 h-[60vh] lg:h-full overflow-hidden">
           <div className="card-sticker bg-white flex flex-col p-0 overflow-hidden shadow-pop-lg h-full hover:transform-none animate-in fade-in slide-in-from-right-8 duration-500 delay-100">
             <div className="px-6 py-4 border-b-2 border-border flex items-center justify-between bg-white sticky top-0 z-20">
               <div className="flex items-center gap-3">
