@@ -995,8 +995,7 @@ function WatchContent() {
         </div>
       )}
 
-      {/* ── Main layout ────────────────────────────────────────── */}
-      <main className="flex-1 flex flex-col lg:flex-row gap-6 p-4 sm:p-8 relative z-10 lg:h-[calc(100vh-140px)] min-h-[600px] lg:overflow-hidden print-hidden">
+      <main className="flex-1 flex flex-col lg:flex-row gap-6 p-4 sm:p-8 relative z-10 lg:h-[calc(100vh-140px)] overflow-hidden print-hidden">
 
         {/* ── Video player ─────────────────────────────────────── */}
         <section className="flex-[3] flex flex-col gap-4 min-w-0 h-full">
@@ -1179,7 +1178,7 @@ function WatchContent() {
         </section>
 
         {/* ── Transcript panel ──────────────────────────────────── */}
-        <section className="flex-[2] flex flex-col gap-4 min-w-0 h-full max-h-[50vh] lg:max-h-none overflow-hidden">
+        <section className="flex-[2] flex flex-col gap-4 min-w-0 h-full overflow-hidden">
           <div className="card-sticker bg-white flex flex-col p-0 overflow-hidden shadow-pop-lg h-full hover:transform-none animate-in fade-in slide-in-from-right-8 duration-500 delay-100">
             <div className="px-6 py-4 border-b-2 border-border flex items-center justify-between bg-white sticky top-0 z-20">
               <div className="flex items-center gap-3">
