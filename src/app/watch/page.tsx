@@ -1107,14 +1107,28 @@ function WatchContent() {
                     <div className="space-y-4">
                       <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{t.typographyLabel || 'Typography'}</p>
                       <div className="grid grid-cols-1 gap-4">
-                        {[{ label: t.mainSize, value: mainFontSize, set: setMainFontSize, min: 14, max: 36 },
-                          { label: t.subSize, value: subFontSize, set: setSubFontSize, min: 10, max: 26 }].map(s => (
-                          <div key={s.label} className="space-y-2">
+                        {[
+                          { label: t.mainSize, value: mainFontSize, set: setMainFontSize, min: 14, max: 36, color: mainColor, setColor: setMainColor },
+                          { label: t.subSize, value: subFontSize, set: setSubFontSize, min: 10, max: 26, color: subColor, setColor: setSubColor }
+                        ].map(s => (
+                          <div key={s.label} className="space-y-3">
                             <div className="flex justify-between text-[10px] font-black uppercase tracking-wider text-muted-foreground">
                               <span>{s.label}</span><span>{s.value}px</span>
                             </div>
                             <input type="range" min={s.min} max={s.max} value={s.value} onChange={e => s.set(Number(e.target.value))} 
                               className="w-full h-1.5 bg-muted rounded-full accent-accent cursor-pointer" />
+                            
+                            <div className="flex items-center gap-2 pt-1 pb-1">
+                              {['#ffffff', '#fde047', '#22d3ee', '#4ade80', '#f472b6'].map(c => (
+                                <button
+                                  key={c}
+                                  onClick={() => s.setColor(c)}
+                                  className={`w-5 h-5 rounded-full border-2 transition-all hover:scale-125
+                                    ${s.color === c ? "border-border shadow-pop-active scale-110" : "border-muted"}`}
+                                  style={{ backgroundColor: c }}
+                                />
+                              ))}
+                            </div>
                           </div>
                         ))}
                       </div>
