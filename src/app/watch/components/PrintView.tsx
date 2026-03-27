@@ -14,7 +14,7 @@ interface Props {
 
 export default function PrintView({ data, printConfig, vocabWords, analysisData, savedSentences, notes }: Props) {
   return (
-    <div id="print-view" className="hidden-on-screen bg-white text-black w-full font-sans">
+    <div id="print-view" className="hidden print:block bg-white text-black w-full font-sans">
       {/* Header */}
       <div style={{ borderBottom: "4px solid #E62B1E", paddingBottom: "10px", marginBottom: "14px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
