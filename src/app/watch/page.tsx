@@ -673,7 +673,13 @@ function WatchContent() {
   useEffect(() => {
     if (activeIndex !== -1 && activeIndex !== lastActiveIndex) {
       setLastActiveIndex(activeIndex);
-      rowVirtualizer.scrollToIndex(activeIndex, { align: "center", behavior: "smooth" });
+      // Wait a frame to ensure virtualizer handles current sizes
+      requestAnimationFrame(() => {
+        rowVirtualizer.scrollToIndex(activeIndex, { 
+          align: "center", 
+          behavior: activeIndex === 0 ? "auto" : "smooth" 
+        });
+      });
     }
   }, [activeIndex, lastActiveIndex, rowVirtualizer]);
 
@@ -1194,56 +1200,59 @@ function WatchContent() {
         </section>
 
         {/* ── Transcript panel ──────────────────────────────────── */}
-        <section className="flex-[2] flex flex-col gap-4 min-w-0 h-[60vh] lg:h-full overflow-hidden">
-          <div className="card-sticker bg-white flex flex-col p-0 overflow-hidden shadow-pop-lg h-full hover:transform-none animate-in fade-in slide-in-from-right-8 duration-500 delay-100">
-            <div className="px-6 py-4 border-b-2 border-border flex items-center justify-between bg-white sticky top-0 z-20">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-secondary border-2 border-border rounded-xl shadow-pop flex items-center justify-center">
-                   <FileText size={20} className="text-foreground" strokeWidth={3} />
-                </div>
-                <div>
-                   <h2 className="text-sm font-black uppercase tracking-widest text-foreground">{t.transcript}</h2>
-                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tighter">{data?.transcript?.length ?? 0} {t.sentences || 'Sentences'}</p>
-                </div>
+        <section className="flex-[2] flex flex-col min-w-0 h-[60vh] lg:h-full overflow-hidden border-l-2 border-border bg-white">
+          {/* Transcript Header */}
+          <div className="px-6 py-4 border-b-2 border-border flex items-center justify-between bg-white shrink-0 z-20">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-secondary border-2 border-border rounded-xl shadow-pop flex items-center justify-center">
+                 <FileText size={20} className="text-foreground" strokeWidth={3} />
               </div>
-
-                <div className="flex items-center gap-2">
-                  {data?.needsTranscription && (
-                    <button onClick={handleTranscribe} disabled={isTranscribing}
-                      className="btn-candy text-[10px] px-3 py-2 bg-secondary/10 text-secondary border-secondary/20 shadow-none hover:bg-secondary hover:text-white">
-                      {isTranscribing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                      <span className="ml-1.5 uppercase font-black">{isTranscribing ? (transcribeStatus || t.aiTranscribing) : t.aiTranscribe}</span>
-                    </button>
-                  )}
-                  {data?.isTranslationMissing && subtitleLang !== "en" && (
-                    <button onClick={handleAiTranslate} disabled={isAiTranslating}
-                      className="btn-candy text-[10px] px-3 py-2 bg-accent/10 text-accent border-accent/20 shadow-none hover:bg-accent hover:text-white">
-                      {isAiTranslating ? <Loader2 size={12} className="animate-spin" /> : <Globe size={12} />}
-                      <span className="ml-1.5 uppercase font-black">{isAiTranslating ? (t.aiTranslating || 'Translating...') : (t.aiTranslate || 'AI Translate')}</span>
-                    </button>
-                  )}
-                </div>
+              <div>
+                 <h2 className="text-sm font-black uppercase tracking-widest text-foreground">{t.transcript}</h2>
+                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tighter">
+                   {data?.transcript?.length ?? 0} {t.sentences || 'Sentences'}
+                 </p>
+              </div>
             </div>
 
-            <div ref={transcriptScrollRef} className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-background/50">
-              {data && data.transcript && data.transcript.length > 0 ? (
-                <div style={{ height: rowVirtualizer.getTotalSize() || 500, position: "relative", width: "100%" }}>
-                  {rowVirtualizer.getVirtualItems().map(vRow => {
-                  const idx = vRow.index;
-                  const item = data!.transcript[idx];
-                  const isActive = activeIndex === idx;
-                  return (
-                    <div key={item.id}
-                      data-index={idx}
-                      ref={rowVirtualizer.measureElement}
-                      className="absolute left-0 w-full px-2"
-                      style={{ transform: `translateY(${vRow.start}px)` }}>
-                      <div
-                        onClick={() => { if (!hasInteracted) setHasInteracted(true); if (videoRef.current) { videoRef.current.currentTime = (item.startTime - subtitleOffset) / 1000; videoRef.current.play(); } }}
-                        className={`group/item p-4 rounded-2xl border-2 transition-all cursor-pointer relative
-                          ${isActive 
-                            ? "bg-white border-border shadow-pop-lg z-10" 
-                            : "bg-white/60 border-muted hover:bg-white hover:border-border"}`}>
+            <div className="flex items-center gap-2">
+              {data?.needsTranscription && (
+                <button onClick={handleTranscribe} disabled={isTranscribing}
+                  className="btn-candy text-[10px] px-3 py-2 bg-secondary text-white border-border shadow-pop-sm hover:scale-105 active:scale-95 transition-all">
+                  {isTranscribing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                  <span className="ml-1.5 uppercase font-black">{isTranscribing ? (transcribeStatus || t.aiTranscribing) : t.aiTranscribe}</span>
+                </button>
+              )}
+              {data?.isTranslationMissing && subtitleLang !== "en" && (
+                <button onClick={handleAiTranslate} disabled={isAiTranslating}
+                  className="btn-candy text-[10px] px-3 py-2 bg-accent text-white border-border shadow-pop-sm hover:scale-105 active:scale-95 transition-all">
+                  {isAiTranslating ? <Loader2 size={12} className="animate-spin" /> : <Globe size={12} />}
+                  <span className="ml-1.5 uppercase font-black">{isAiTranslating ? (t.aiTranslating || 'Translating...') : (t.aiTranslate || 'AI Translate')}</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Transcript List Scroll Area */}
+          <div ref={transcriptScrollRef} className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-background/50 scroll-smooth">
+            {data && data.transcript && data.transcript.length > 0 ? (
+              <div style={{ height: rowVirtualizer.getTotalSize() || 500, position: "relative", width: "100%" }}>
+                {rowVirtualizer.getVirtualItems().map(vRow => {
+                const idx = vRow.index;
+                const item = data!.transcript[idx];
+                const isActive = activeIndex === idx;
+                return (
+                  <div key={item.id}
+                    data-index={idx}
+                    ref={rowVirtualizer.measureElement}
+                    className="absolute left-0 w-full pb-4"
+                    style={{ transform: `translateY(${vRow.start}px)` }}>
+                    <div
+                      onClick={() => { if (!hasInteracted) setHasInteracted(true); if (videoRef.current) { videoRef.current.currentTime = (item.startTime - subtitleOffset) / 1000; videoRef.current.play(); } }}
+                      className={`group/item p-4 rounded-2xl border-2 transition-all cursor-pointer relative
+                        ${isActive 
+                          ? "bg-white border-border shadow-pop-lg z-10 scale-[1.02]" 
+                          : "bg-white/60 border-muted hover:bg-white hover:border-border hover:scale-[1.01]"}`}>
                         
                         {/* Status Dots */}
                         <div className="absolute left-0 top-1/2 -translate-x-3 -translate-y-1/2 flex flex-col gap-1">
@@ -1330,8 +1339,7 @@ function WatchContent() {
               </div>
             ) : null}
           </div>
-        </div>
-      </section>
+        </section>
 
         {/* ── AI Analysis panel (Drawer-like overlay) ───────────────────── */}
         {analysisPanelId !== null && analysisData[analysisPanelId] && (
