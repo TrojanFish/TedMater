@@ -8,7 +8,7 @@ import {
   Mic, FastForward, BookMarked, Sliders,
   FileText, Video, FileCode, Sun, Moon, Zap,
   Maximize, PictureInPicture, Volume, Volume1, Volume2, Lock, LogOut, History as HistoryIcon,
-  MoreHorizontal, Globe
+  MoreHorizontal, Globe, ChevronDown
 } from "lucide-react";
 
 const GithubIcon = () => (
@@ -80,6 +80,12 @@ function WatchContent() {
       localStorage.setItem(`tm_translation_${slug}_${lang}`, JSON.stringify({ translations, timestamp: Date.now() }));
     } catch { /* quota exceeded — silently skip */ }
   };
+
+  const handleLogout = async () => {
+    const res = await fetch("/api/auth/logout", { method: "POST" });
+    if (res.ok) { window.location.reload(); }
+  };
+
   // ──────────────────────────────────────────────────────────────
 
   const [data, setData] = useState<ParsedData | null>(null);
@@ -111,6 +117,7 @@ function WatchContent() {
   const [savedSentences, setSavedSentences] = useState<SavedSentence[]>([]);
   const [showVocab, setShowVocab] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [noteInput, setNoteInput] = useState("");
@@ -879,12 +886,11 @@ function WatchContent() {
                 <div className="absolute right-0 top-16 bg-white border-2 border-border rounded-2xl shadow-pop-lg z-50 py-3 min-w-[240px] animate-in slide-in-from-top-4 duration-300">
                   <div className="px-4 pb-3 border-b-2 border-muted mb-2 font-black uppercase text-[10px] text-muted-foreground tracking-widest">{t.exportLabel}</div>
                   {[
-                    { icon: <Video size={14} />, label: t.downloadVideo, action: () => { if (data?.downloadUrl) { const a = document.createElement("a"); a.href = data.downloadUrl; a.download = `${data.title}.mp4`; a.target = "_blank"; a.click(); } setShowMoreMenu(false); }, disabled: !data?.downloadUrl },
                     { icon: <FileText size={14} />, label: t.exportPdf, action: () => { setShowMoreMenu(false); setShowPrintModal(true); } },
                     { icon: <FileCode size={14} />, label: t.exportSrt, action: () => { exportSRT(); setShowMoreMenu(false); } },
                   ].map((item, i) => (
-                    <button key={i} onClick={item.disabled ? undefined : item.action} disabled={!!item.disabled}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-sm font-black text-foreground hover:bg-tertiary/20 transition-colors uppercase tracking-widest disabled:opacity-30">
+                    <button key={i} onClick={item.action}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm font-black text-foreground hover:bg-tertiary/20 transition-colors uppercase tracking-widest">
                       <span className="text-accent">{item.icon}</span>{item.label}
                     </button>
                   ))}
@@ -918,12 +924,35 @@ function WatchContent() {
           )}
 
           {user && (
-            <div className="flex items-center gap-2 px-3 py-1 bg-tertiary border-2 border-border rounded-xl shadow-pop">
-               <div className="w-6 h-6 rounded-lg bg-white border-2 border-border flex items-center justify-center -rotate-6">
-                  <Sparkles size={12} className="text-accent" strokeWidth={2.5} />
-               </div>
-               <span className="text-xs font-black text-foreground">{user.credits} <span className="text-[10px] text-muted-foreground ml-0.5">PTS</span></span>
-            </div>
+            <>
+              <div className="w-px h-6 bg-border/20 mx-1 hidden md:block" />
+              <div className="relative">
+                <button onClick={() => setShowUserMenu(!showUserMenu)} 
+                  className="btn-candy py-1.5 px-3 bg-tertiary text-foreground shadow-pop hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-white border-2 border-border flex items-center justify-center -rotate-6">
+                    <Sparkles size={12} className="text-accent" strokeWidth={2.5} />
+                  </div>
+                  <span className="text-xs font-black">{user.credits} <span className="text-[10px] opacity-60">PTS</span></span>
+                  <ChevronDown size={14} strokeWidth={3} className={showUserMenu ? "rotate-180" : ""} />
+                </button>
+                {showUserMenu && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
+                    <div className="absolute right-0 mt-3 bg-white border-2 border-border rounded-2xl shadow-pop-lg z-50 py-3 min-w-[200px] overflow-hidden animate-in slide-in-from-top-4 duration-300">
+                      <div className="px-4 pb-3 border-b-2 border-muted mb-2">
+                        <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Account</p>
+                        <p className="text-sm font-black text-foreground truncate">{user.email}</p>
+                      </div>
+                      <button onClick={handleLogout}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-sm font-black text-secondary hover:bg-secondary/10 transition-colors uppercase tracking-widest">
+                        <LogOut size={16} strokeWidth={2.5} />
+                        {t.logout}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
           )}
         </div>
       </header>
