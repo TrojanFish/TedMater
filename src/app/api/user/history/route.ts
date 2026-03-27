@@ -8,21 +8,16 @@ export const dynamic = "force-dynamic";
 const JWT_SECRET = process.env.JWT_SECRET as string;
 if (!JWT_SECRET) throw new Error("JWT_SECRET environment variable is not set");
 
-// === Authenticate Function ===
 async function auth() {
   const cookieStore = await cookies();
   const token = cookieStore.get("ted_session")?.value;
   if (!token) return null;
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
-    const user = await prisma.user.findUnique({ where: { id: decoded.userId } });
-    return user;
-  } catch (err) {
-    return null;
-  }
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] }) as { userId: string };
+    return prisma.user.findUnique({ where: { id: decoded.userId } });
+  } catch { return null; }
 }
 
-// GET history list
 export async function GET() {
   try {
     const user = await auth();
@@ -31,7 +26,7 @@ export async function GET() {
     const history = await prisma.history.findMany({
       where: { userId: user.id },
       orderBy: { updatedAt: "desc" },
-      take: 20
+      take: 20,
     });
     return NextResponse.json(history);
   } catch (err) {
@@ -40,7 +35,6 @@ export async function GET() {
   }
 }
 
-// POST update history
 export async function POST(req: Request) {
   try {
     const user = await auth();
@@ -49,30 +43,34 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { videoUrl, title, presenter, progressTime, duration } = body;
 
-    if (!videoUrl) return NextResponse.json({ error: "Missing videoUrl" }, { status: 400 });
+    // Validate required fields
+    if (typeof videoUrl !== "string" || !videoUrl.includes("ted.com/talks/")) {
+      return NextResponse.json({ error: "Invalid videoUrl" }, { status: 400 });
+    }
+    // Sanitize strings (strip to plain text, no HTML)
+    const safeTitle = typeof title === "string" ? title.slice(0, 300).replace(/[<>]/g, "") : "Unknown TED Talk";
+    const safePresenter = typeof presenter === "string" ? presenter.slice(0, 200).replace(/[<>]/g, "") : "Unknown";
+    // Validate numbers: must be finite, non-negative
+    const safeProgress = Number.isFinite(progressTime) && progressTime >= 0 ? progressTime : 0;
+    const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : null;
 
     const record = await prisma.history.upsert({
-      where: {
-        userId_videoUrl: {
-          userId: user.id,
-          videoUrl: videoUrl,
-        }
-      },
+      where: { userId_videoUrl: { userId: user.id, videoUrl } },
       update: {
-        title,
-        presenter,
-        progressTime: progressTime || 0,
-        duration: duration || null,
-        updatedAt: new Date() // Force timestamp update
+        title: safeTitle,
+        presenter: safePresenter,
+        progressTime: safeProgress,
+        duration: safeDuration,
+        updatedAt: new Date(),
       },
       create: {
         userId: user.id,
         videoUrl,
-        title: title || "Unknown TED Talk",
-        presenter: presenter || "Unknown",
-        progressTime: progressTime || 0,
-        duration: duration || null
-      }
+        title: safeTitle,
+        presenter: safePresenter,
+        progressTime: safeProgress,
+        duration: safeDuration,
+      },
     });
 
     return NextResponse.json({ success: true, record });

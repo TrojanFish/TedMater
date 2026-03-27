@@ -35,7 +35,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "GEMINI_API_KEY not configured" }, { status: 500 });
     }
 
-    const { action, text, context, sentences, targetLang } = await req.json();
+    const body = await req.json();
+    const { action, text, context, sentences, targetLang } = body;
+
+    // Validate action is a known value
+    if (!action || !["define", "analyze", "translate"].includes(action)) {
+      return NextResponse.json({ error: "Unsupported action" }, { status: 400 });
+    }
+    // Guard against oversized inputs
+    if (typeof text === "string" && text.length > 500) {
+      return NextResponse.json({ error: "text too long (max 500 chars)" }, { status: 400 });
+    }
+    if (typeof context === "string" && context.length > 1000) {
+      return NextResponse.json({ error: "context too long (max 1000 chars)" }, { status: 400 });
+    }
+    if (Array.isArray(sentences)) {
+      // 1500 covers a ~2-hour TED talk at ~1 cue per 5s; reject truly absurd payloads
+      if (sentences.length > 1500) {
+        return NextResponse.json({ error: "Too many sentences (max 1500)" }, { status: 400 });
+      }
+      // Each individual sentence must be short (subtitle cues are never paragraphs)
+      if (sentences.some((s: unknown) => typeof s !== "string" || s.length > 500)) {
+        return NextResponse.json({ error: "Each sentence must be a string under 500 chars" }, { status: 400 });
+      }
+    }
 
     // Rate limit per action
     const limit = RATE_LIMITS[action];

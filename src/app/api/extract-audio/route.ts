@@ -236,13 +236,14 @@ export async function GET(req: NextRequest) {
     const safe = segUrls.filter(isAllowedUrl);
     if (safe.length === 0) return NextResponse.json({ error: "No allowed segments" }, { status: 403 });
 
-    // Fetch + demux in batches
+    // Fetch + demux in batches; use allSettled so one bad segment doesn't abort the rest
     const adtsChunks: Buffer[] = [];
     for (let i = 0; i < safe.length; i += CONCURRENCY) {
       const batch = safe.slice(i, i + CONCURRENCY);
-      const bufs = await Promise.all(batch.map(fetchBuf));
-      for (const buf of bufs) {
-        const adts = demuxTs(buf);
+      const results = await Promise.allSettled(batch.map(fetchBuf));
+      for (const r of results) {
+        if (r.status === "rejected") { console.warn("[extract-audio] segment failed:", r.reason); continue; }
+        const adts = demuxTs(r.value);
         if (adts.length > 0) adtsChunks.push(adts);
       }
     }

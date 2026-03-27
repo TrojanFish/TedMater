@@ -39,7 +39,7 @@ function WatchContent() {
 
   // ── Transcript / translation localStorage cache ────────────────
   const CACHE_TTL = 30 * 24 * 60 * 60 * 1000;        // 30 days — transcript text (stable)
-  const TRANSLATION_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days — translations may be updated
+  const TRANSLATION_CACHE_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days — same as transcript so they expire together
 
   const slugFromUrl = (url: string): string => {
     const m = url.match(/ted\.com\/talks\/([^/?#]+)/);
@@ -59,7 +59,7 @@ function WatchContent() {
   const writeTranscriptCache = (slug: string, transcript: TranscriptItem[]) => {
     try {
       localStorage.setItem(`tm_transcript_${slug}`, JSON.stringify({
-        transcript: transcript.map(({ id, startTime, english }) => ({ id, startTime, english, translated: "" })),
+        transcript: transcript.map(({ id, startTime, english }) => ({ id, startTime, english, translated: "" })), // translated kept blank; pulled from translation cache
         timestamp: Date.now(),
       }));
     } catch { /* quota exceeded — silently skip */ }
@@ -350,6 +350,9 @@ function WatchContent() {
           } else if (status === 'error') {
             alert('转录失败: ' + message);
             setIsTranscribing(false);
+            // Terminate and reset so next attempt can create a fresh worker
+            workerRef.current?.terminate();
+            workerRef.current = null;
           }
         };
       }
@@ -364,8 +367,9 @@ function WatchContent() {
     }
   };
 
-  // AbortController for in-flight subtitle fetch — cancelled on rapid language switches
+  // AbortController for in-flight subtitle fetch — cancelled on rapid language switches or unmount
   const subtitleAbortRef = useRef<AbortController | null>(null);
+  useEffect(() => () => { subtitleAbortRef.current?.abort(); }, []);
 
   // Change subtitle language without re-parsing the full video
   const handleSubtitleLangChange = async (newLang: string) => {
@@ -484,11 +488,16 @@ function WatchContent() {
   // Recording
   const [recordingId, setRecordingId] = useState<number | null>(null);
   const [audioUrls, setAudioUrls] = useState<Record<number, string>>({});
+  const audioUrlsRef = useRef<Record<number, string>>({});
+  // Keep ref in sync so cleanup effect can revoke all blob URLs on unmount
+  useEffect(() => { audioUrlsRef.current = audioUrls; }, [audioUrls]);
+  useEffect(() => () => { Object.values(audioUrlsRef.current).forEach(URL.revokeObjectURL); }, []);
   const [user, setUser] = useState<{ email: string; credits: number } | null>(null);
   // Keep a ref in sync with user so HLS cleanup can read it without being a dep
   const userRef = useRef<{ email: string; credits: number } | null>(null);
   useEffect(() => { userRef.current = user; }, [user]);
   const [showAuth, setShowAuth] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [showHistory, setShowHistory] = useState(false);
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -594,10 +603,10 @@ function WatchContent() {
     };
     fetchData();
 
-    // Fetch history
-    fetch("/api/user/history").then(res => res.json()).then(hData => {
+    // Fetch history (non-critical — silently skip if unauthenticated or offline)
+    fetch("/api/user/history").then(res => res.ok ? res.json() : null).then(hData => {
       if (Array.isArray(hData)) setHistoryItems(hData);
-    }).catch(() => {});
+    }).catch(e => console.warn("[history] failed to load:", e.message));
 
   }, [videoUrlParam, router]);
 
@@ -673,13 +682,7 @@ function WatchContent() {
   useEffect(() => {
     if (activeIndex !== -1 && activeIndex !== lastActiveIndex) {
       setLastActiveIndex(activeIndex);
-      // Wait a frame to ensure virtualizer handles current sizes
-      requestAnimationFrame(() => {
-        rowVirtualizer.scrollToIndex(activeIndex, { 
-          align: "center", 
-          behavior: activeIndex === 0 ? "auto" : "smooth" 
-        });
-      });
+      rowVirtualizer.scrollToIndex(activeIndex, { align: "center", behavior: "smooth" });
     }
   }, [activeIndex, lastActiveIndex, rowVirtualizer]);
 
@@ -766,8 +769,9 @@ function WatchContent() {
     if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
   };
 
-  // AbortController for in-flight word lookup — cancelled when user clicks a different word
+  // AbortController for in-flight word lookup — cancelled when user clicks a different word or unmount
   const wordAbortRef = useRef<AbortController | null>(null);
+  useEffect(() => () => { wordAbortRef.current?.abort(); }, []);
 
   const deductPoints = async (action: "WORD_LOOKUP" | "AI_ANALYZE" | "PDF_EXPORT") => {
     if (!user) { setShowAuth(true); return false; }
@@ -890,7 +894,7 @@ function WatchContent() {
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="hidden sm:flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-2 relative">
             <button onClick={() => setShowVocab(true)}
               className="w-10 h-10 flex items-center justify-center bg-white border-2 border-border rounded-xl shadow-pop hover:scale-105 active:scale-95 transition-all text-foreground"
               title={t.wordsTab}>
@@ -933,6 +937,9 @@ function WatchContent() {
                 className="btn-candy py-2 px-4 text-xs h-10 flex items-center gap-2">
                 <Sparkles size={14} strokeWidth={2.5} className="mr-1 text-tertiary" />
                 <span className="font-black text-foreground">{user?.credits || 0}</span>
+                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">
+                  {lang === "en" ? "pts" : lang === "ja" ? "pt" : lang === "zh-tw" ? "積分" : "积分"}
+                </span>
                 <ChevronDown size={12} strokeWidth={3} className={showUserMenu ? "rotate-180" : ""} />
               </button>
               {showUserMenu && (
@@ -962,7 +969,7 @@ function WatchContent() {
         </div>
       </header>
       
-      {showAuth && <AuthModal onClose={() => setShowAuth(false)} onSuccess={(u) => setUser(u)} />}
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} onSuccess={(u) => setUser(u)} initialMode={authMode} />}
 
       {/* ── History Modal ────────────────────────────────────────── */}
       {showHistory && (
@@ -984,18 +991,18 @@ function WatchContent() {
               </div>
               <div className="space-y-3">
                 <h2 className="text-4xl font-black tracking-tight text-foreground uppercase">{t.login || 'Unlocked Growth'}</h2>
-                <p className="text-sm text-muted-foreground leading-relaxed font-bold">Create a free account to unlock AI analysis, vocabulary building, and shadowing practice.</p>
+                <p className="text-sm text-muted-foreground leading-relaxed font-bold">{t.barrierDesc}</p>
               </div>
               <div className="flex flex-col gap-3 pt-4">
-                <button 
-                  onClick={() => setShowAuth(true)}
-                  className="btn-candy bg-accent text-white py-4.5 text-sm uppercase">
-                  Register & Get 100 Free Credits
+                <button
+                  onClick={() => { setAuthMode("signup"); setShowAuth(true); }}
+                  className="btn-candy w-full py-5 text-sm uppercase">
+                  {t.barrierRegister}
                 </button>
-                <button 
-                  onClick={() => setShowAuth(true)}
+                <button
+                  onClick={() => { setAuthMode("login"); setShowAuth(true); }}
                   className="w-full py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors">
-                  Already have an account? Sign In
+                  {t.barrierSignIn}
                 </button>
               </div>
            </div>
@@ -1039,7 +1046,9 @@ function WatchContent() {
                   </button>
                   <div className="text-center space-y-2">
                     <p className="text-lg font-black text-white px-8">{data?.title}</p>
-                    <p className="text-sm font-bold text-white/50 uppercase tracking-widest">{t.loadingTalk}</p>
+                    <p className="text-sm font-bold text-white/50 uppercase tracking-widest">
+                      {lang === "en" ? "Click to Play" : lang === "ja" ? "クリックして再生" : lang === "zh-tw" ? "點擊播放" : "点击播放"}
+                    </p>
                   </div>
                 </div>
               )}
@@ -1115,7 +1124,7 @@ function WatchContent() {
 
                   <div className="space-y-6 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
                     <div className="space-y-4">
-                      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{t.typographyLabel || 'Typography'}</p>
+                      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{t.typographyLabel}</p>
                       <div className="grid grid-cols-1 gap-4">
                         {[
                           { label: t.mainSize, value: mainFontSize, set: setMainFontSize, min: 14, max: 36, color: mainColor, setColor: setMainColor },
@@ -1155,12 +1164,12 @@ function WatchContent() {
 
                     <div className="space-y-4">
                       <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-muted-foreground mr-1">
-                        <span>Background Overlay</span>
+                        <span>{t.backgroundOverlay}</span>
                         <button onClick={() => setShowSubtitleBg(!showSubtitleBg)}
                           className={`w-10 h-5 rounded-full transition-all relative border-2 border-border
                             ${showSubtitleBg ? "bg-accent" : "bg-muted"}`}>
                           <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all
-                            ${showSubtitleBg ? "left-5.5" : "left-0.5"}`} />
+                            ${showSubtitleBg ? "left-[22px]" : "left-0.5"}`} />
                         </button>
                       </div>
                     </div>
@@ -1180,7 +1189,7 @@ function WatchContent() {
                     </div>
 
                     <div className="space-y-4">
-                      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{t.playbackRate || 'Speed'}</p>
+                      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{t.playbackRate}</p>
                       <div className="flex flex-wrap gap-2">
                         {SPEEDS.map(r => (
                           <button key={r} onClick={() => { if (videoRef.current) videoRef.current.playbackRate = r; setPlaybackRate(r); }}
@@ -1200,68 +1209,66 @@ function WatchContent() {
         </section>
 
         {/* ── Transcript panel ──────────────────────────────────── */}
-        <section className="flex-[2] flex flex-col min-w-0 h-[60vh] lg:h-full overflow-hidden border-l-2 border-border bg-white">
-          {/* Transcript Header */}
-          <div className="px-6 py-4 border-b-2 border-border flex items-center justify-between bg-white shrink-0 z-20">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-secondary border-2 border-border rounded-xl shadow-pop flex items-center justify-center">
-                 <FileText size={20} className="text-foreground" strokeWidth={3} />
+        <section className="flex-[2] flex flex-col gap-4 min-w-0 h-[60vh] lg:h-full overflow-hidden">
+          <div className="card-sticker bg-white flex flex-col p-0 overflow-hidden shadow-pop-lg h-full hover:transform-none animate-in fade-in slide-in-from-right-8 duration-500 delay-100">
+            <div className="px-6 py-4 border-b-2 border-border flex items-center justify-between bg-white sticky top-0 z-20">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-secondary border-2 border-border rounded-xl shadow-pop flex items-center justify-center">
+                  {isLoadingSubtitles
+                    ? <Loader2 size={20} className="text-foreground animate-spin" strokeWidth={3} />
+                    : <FileText size={20} className="text-foreground" strokeWidth={3} />}
+                </div>
+                <div>
+                   <h2 className="text-sm font-black uppercase tracking-widest text-foreground">{t.transcript}</h2>
+                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tighter">{data?.transcript?.length ?? 0} {t.sentences}</p>
+                </div>
               </div>
-              <div>
-                 <h2 className="text-sm font-black uppercase tracking-widest text-foreground">{t.transcript}</h2>
-                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tighter">
-                   {data?.transcript?.length ?? 0} {t.sentences || 'Sentences'}
-                 </p>
-              </div>
+
+                <div className="flex items-center gap-2">
+                  {data?.needsTranscription && (
+                    <button onClick={handleTranscribe} disabled={isTranscribing}
+                      className="btn-candy text-[10px] px-3 py-2 bg-secondary/10 text-secondary border-secondary/20 shadow-none hover:bg-secondary hover:text-white">
+                      {isTranscribing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                      <span className="ml-1.5 uppercase font-black">{isTranscribing ? (transcribeStatus || t.aiTranscribing) : t.aiTranscribe}</span>
+                    </button>
+                  )}
+                  {data?.isTranslationMissing && subtitleLang !== "en" && (
+                    <button onClick={handleAiTranslate} disabled={isAiTranslating}
+                      className="btn-candy text-[10px] px-3 py-2 bg-accent/10 text-accent border-accent/20 shadow-none hover:bg-accent hover:text-white">
+                      {isAiTranslating ? <Loader2 size={12} className="animate-spin" /> : <Globe size={12} />}
+                      <span className="ml-1.5 uppercase font-black">{isAiTranslating ? (t.aiTranslating || 'Translating...') : (t.aiTranslate || 'AI Translate')}</span>
+                    </button>
+                  )}
+                </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {data?.needsTranscription && (
-                <button onClick={handleTranscribe} disabled={isTranscribing}
-                  className="btn-candy text-[10px] px-3 py-2 bg-secondary text-white border-border shadow-pop-sm hover:scale-105 active:scale-95 transition-all">
-                  {isTranscribing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                  <span className="ml-1.5 uppercase font-black">{isTranscribing ? (transcribeStatus || t.aiTranscribing) : t.aiTranscribe}</span>
-                </button>
-              )}
-              {data?.isTranslationMissing && subtitleLang !== "en" && (
-                <button onClick={handleAiTranslate} disabled={isAiTranslating}
-                  className="btn-candy text-[10px] px-3 py-2 bg-accent text-white border-border shadow-pop-sm hover:scale-105 active:scale-95 transition-all">
-                  {isAiTranslating ? <Loader2 size={12} className="animate-spin" /> : <Globe size={12} />}
-                  <span className="ml-1.5 uppercase font-black">{isAiTranslating ? (t.aiTranslating || 'Translating...') : (t.aiTranslate || 'AI Translate')}</span>
-                </button>
-              )}
-            </div>
-          </div>
+            <div ref={transcriptScrollRef} className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-background/50">
+              {data && data.transcript && data.transcript.length > 0 ? (
+                <div style={{ height: rowVirtualizer.getTotalSize() || 500, position: "relative", width: "100%" }}>
+                  {rowVirtualizer.getVirtualItems().map(vRow => {
+                  const idx = vRow.index;
+                  const item = data!.transcript[idx];
+                  const isActive = activeIndex === idx;
+                  return (
+                    <div key={item.id}
+                      data-index={idx}
+                      ref={rowVirtualizer.measureElement}
+                      className="absolute left-0 w-full px-2"
+                      style={{ transform: `translateY(${vRow.start}px)` }}>
+                      <div
+                        onClick={() => { if (!hasInteracted) setHasInteracted(true); if (videoRef.current) { videoRef.current.currentTime = (item.startTime - subtitleOffset) / 1000; videoRef.current.play(); } }}
+                        className={`group/item p-4 rounded-2xl border-2 transition-all cursor-pointer relative overflow-hidden
+                          ${isActive
+                            ? "bg-white border-border shadow-pop-lg z-10"
+                            : "bg-white/60 border-muted hover:bg-white hover:border-border"}`}>
 
-          {/* Transcript List Scroll Area */}
-          <div ref={transcriptScrollRef} className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-background/50 scroll-smooth">
-            {data && data.transcript && data.transcript.length > 0 ? (
-              <div style={{ height: rowVirtualizer.getTotalSize() || 500, position: "relative", width: "100%" }}>
-                {rowVirtualizer.getVirtualItems().map(vRow => {
-                const idx = vRow.index;
-                const item = data!.transcript[idx];
-                const isActive = activeIndex === idx;
-                return (
-                  <div key={item.id}
-                    data-index={idx}
-                    ref={rowVirtualizer.measureElement}
-                    className="absolute left-0 w-full pb-4"
-                    style={{ transform: `translateY(${vRow.start}px)` }}>
-                    <div
-                      onClick={() => { if (!hasInteracted) setHasInteracted(true); if (videoRef.current) { videoRef.current.currentTime = (item.startTime - subtitleOffset) / 1000; videoRef.current.play(); } }}
-                      className={`group/item p-4 rounded-2xl border-2 transition-all cursor-pointer relative
-                        ${isActive 
-                          ? "bg-white border-border shadow-pop-lg z-10 scale-[1.02]" 
-                          : "bg-white/60 border-muted hover:bg-white hover:border-border hover:scale-[1.01]"}`}>
-                        
-                        {/* Status Dots */}
-                        <div className="absolute left-0 top-1/2 -translate-x-3 -translate-y-1/2 flex flex-col gap-1">
-                          {isActive && <div className="w-2 h-6 bg-accent rounded-full border border-border animate-bounce" />}
-                          {notes[item.id] && <div className="w-2 h-2 bg-secondary rounded-full border border-border" />}
-                        </div>
+                        {/* Active indicator: left stripe */}
+                        {isActive && <div className="absolute left-0 top-0 h-full w-1 bg-accent" />}
+                        {/* Notes indicator: top-right dot */}
+                        {notes[item.id] && <div className="absolute top-2 right-2 w-2 h-2 bg-secondary rounded-full border border-border" />}
 
                         <div className="flex gap-4 items-start">
-                          <span className="text-[10px] font-black font-mono w-6 shrink-0 text-center opacity-30 mt-1">{idx + 1}</span>
+                          <span className="text-[10px] font-black font-mono w-8 shrink-0 text-center opacity-30 mt-1">{idx + 1}</span>
                           <div className="flex-1 space-y-2">
                             <p className="font-bold leading-relaxed selection:bg-accent selection:text-white" style={{ fontSize: mainFontSize - 2 }}>
                               {item.english.split(" ").map((w, i) => (
@@ -1292,7 +1299,7 @@ function WatchContent() {
                             )}
 
                             {/* Actions bar (Visible on hover or if active) */}
-                            <div className="flex items-center gap-2 pt-2 transition-all group-hover/item:opacity-100 opacity-0 group-focus:opacity-100">
+                            <div className={`flex items-center gap-2 pt-2 transition-all group-hover/item:opacity-100 group-focus:opacity-100 ${isActive ? "opacity-100" : "opacity-0"}`}>
                                <button onClick={e => { e.stopPropagation(); if (analysisPanelId === item.id) setAnalysisPanelId(null); else handleDeepAnalyze(item); }}
                                  className={`btn-candy text-[10px] px-3 py-1.5 shadow-none hover:shadow-pop hover:scale-105 active:scale-95
                                    ${analysisData[item.id] ? "bg-tertiary border-border text-foreground" : "bg-white border-muted text-muted-foreground"}`}>
@@ -1339,7 +1346,8 @@ function WatchContent() {
               </div>
             ) : null}
           </div>
-        </section>
+        </div>
+      </section>
 
         {/* ── AI Analysis panel (Drawer-like overlay) ───────────────────── */}
         {analysisPanelId !== null && analysisData[analysisPanelId] && (

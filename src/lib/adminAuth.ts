@@ -8,7 +8,7 @@ export async function requireAdmin(): Promise<{ ok: true } | { ok: false; error:
   const token = cookieStore.get("ted_admin")?.value;
   if (!token) return { ok: false, error: "Unauthorized", status: 401 };
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as any;
+    const payload = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] }) as any;
     if (payload.role !== "admin") return { ok: false, error: "Forbidden", status: 403 };
     return { ok: true };
   } catch {

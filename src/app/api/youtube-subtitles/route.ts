@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 
+// Validate YouTube video ID: 11 alphanumeric chars (plus - and _)
+const YT_ID_RE = /^[a-zA-Z0-9_-]{11}$/;
+
+// Max valid timestamp: 12 hours in ms
+const MAX_TS_MS = 12 * 60 * 60 * 1000;
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const videoId = searchParams.get("id");
 
-  if (!videoId) {
-    return NextResponse.json({ error: "No video ID provided" }, { status: 400 });
+  if (!videoId || !YT_ID_RE.test(videoId)) {
+    return NextResponse.json({ error: "Invalid video ID" }, { status: 400 });
   }
 
   try {
@@ -15,16 +21,23 @@ export async function GET(req: NextRequest) {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
+      signal: AbortSignal.timeout(15_000),
     });
     const html = await pageRes.text();
 
     // 2. Extract captions data from ytInitialPlayerResponse
-    const playerResponseMatch = html.match(/ytInitialPlayerResponse\s*=\s*({.+?});/);
+    // YouTube inlines this on one line; using [\s\S]+? instead of the ES2018-only /s flag
+    const playerResponseMatch = html.match(/ytInitialPlayerResponse\s*=\s*(\{[\s\S]+?\});/);
     if (!playerResponseMatch) {
       throw new Error("Could not find player response in YouTube page");
     }
 
-    const playerResponse = JSON.parse(playerResponseMatch[1]);
+    let playerResponse: any;
+    try {
+      playerResponse = JSON.parse(playerResponseMatch[1]);
+    } catch {
+      throw new Error("Failed to parse YouTube player response JSON");
+    }
     const captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
 
     if (!captionTracks || captionTracks.length === 0) {
@@ -33,20 +46,25 @@ export async function GET(req: NextRequest) {
 
     // 3. Prefer English (auto-generated or manual)
     const track = captionTracks.find((t: any) => t.languageCode === 'en') || captionTracks[0];
-    const transcriptRes = await fetch(track.baseUrl + "&fmt=json3");
+    if (!track?.baseUrl) {
+      return NextResponse.json({ error: "No valid caption track URL" }, { status: 404 });
+    }
+    const transcriptRes = await fetch(track.baseUrl + "&fmt=json3", {
+      signal: AbortSignal.timeout(10_000),
+    });
     const transcriptJson = await transcriptRes.json();
 
     // 4. Format to our TranscriptItem structure
     // startTime is in ms (matching the player's currentTime unit)
-    const transcript = transcriptJson.events
-      .filter((e: any) => e.segs)
+    const transcript = (transcriptJson.events ?? [])
+      .filter((e: any) => e.segs && typeof e.tStartMs === "number")
       .map((e: any, i: number) => ({
         id: i,
         startTime: e.tStartMs,  // keep as ms — player compares against currentTime * 1000
-        english: e.segs.map((s: any) => s.utf8).join(" ").trim(),
+        english: e.segs.map((s: any) => s.utf8 ?? "").join(" ").trim(),
         translated: "",
       }))
-      .filter((e: any) => e.english);
+      .filter((e: any) => e.english && e.startTime >= 0 && e.startTime <= MAX_TS_MS);
 
     return NextResponse.json({ transcript });
   } catch (error: any) {

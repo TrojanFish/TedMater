@@ -1,19 +1,32 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import * as bcrypt from "bcryptjs";
 import * as jwt from "jsonwebtoken";
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
 if (!JWT_SECRET) throw new Error("JWT_SECRET environment variable is not set");
 
 export const dynamic = "force-dynamic";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  if (!checkRateLimit(`signup:${getClientIp(req)}`, { windowMs: 60_000, max: 5 })) {
+    return NextResponse.json({ error: "Too many signup attempts" }, { status: 429 });
+  }
+
   try {
     const { email, password, activationCode } = await req.json();
 
     if (!email || !password) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
+    }
+    // Email format
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json({ error: "Invalid email format" }, { status: 400 });
+    }
+    // Password: at least 8 chars, not all whitespace
+    if (typeof password !== "string" || password.trim().length < 8) {
+      return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
     }
     if (!activationCode) {
       return NextResponse.json({ error: "Activation code is required" }, { status: 400 });
@@ -47,7 +60,7 @@ export async function POST(req: Request) {
       return newUser;
     });
 
-    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: "7d" });
+    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { algorithm: "HS256", expiresIn: "7d" });
 
     const response = NextResponse.json({
       user: { id: user.id, email: user.email, credits: user.credits },

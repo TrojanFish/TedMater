@@ -48,9 +48,14 @@ async function getTranscriber() {
 }
 
 self.onmessage = async (e: MessageEvent) => {
+    if (!e.data || typeof e.data !== 'object') return;
     const { type, audio } = e.data;
 
     if (type === 'transcribe') {
+        if (!(audio instanceof Float32Array)) {
+            self.postMessage({ status: 'error', message: '无效的音频数据格式' });
+            return;
+        }
         try {
             const pipe = await getTranscriber();
 

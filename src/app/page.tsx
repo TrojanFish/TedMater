@@ -111,7 +111,7 @@ export default function Home() {
 
       {/* ── Header ─────────────────────────────────────────────── */}
       <header className="sticky top-4 mx-4 sm:mx-8 z-50 flex items-center justify-between px-6 py-3 bg-white border-2 border-border rounded-2xl shadow-pop">
-        <div className="flex items-center gap-3 group cursor-pointer">
+        <div className="flex items-center gap-3 group cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
           <div className="w-10 h-10 bg-accent border-2 border-border rounded-xl shadow-pop flex items-center justify-center -rotate-6 group-hover:rotate-0 transition-transform">
             <Zap className="text-white fill-white" size={20} strokeWidth={2.5} />
           </div>
@@ -312,7 +312,7 @@ export default function Home() {
         <div className="w-full max-w-6xl flex flex-col gap-10">
           <div className="flex flex-col items-center gap-2">
             <h3 className="font-black text-4xl uppercase tracking-tighter border-b-8 border-tertiary pb-2">{t.featuredTitle}</h3>
-            <p className="text-muted-foreground font-bold tracking-widest uppercase text-xs">Handpicked for effective learning</p>
+            <p className="text-muted-foreground font-bold tracking-widest uppercase text-xs">{t.featuredSub}</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -330,7 +330,7 @@ export default function Home() {
                   className={`group bg-white border-2 border-border rounded-2xl shadow-pop-lg transition-all hover:bg-accent/5 relative ${idx % 3 === 0 ? '-rotate-1' : idx % 3 === 1 ? 'rotate-1' : ''}`}>
                   <div className="relative aspect-video m-2 overflow-hidden rounded-xl border-2 border-border group-hover:rotate-1 transition-transform">
                     {talk.thumbnail ? (
-                      <img src={talk.thumbnail} alt={talk.title} className="w-full h-full object-cover" />
+                      <img src={talk.thumbnail} alt={talk.title} className="w-full h-full object-cover" loading="lazy" />
                     ) : (
                       <div className="w-full h-full bg-muted flex items-center justify-center">
                         <Play size={40} className="text-muted-foreground" />
@@ -384,10 +384,15 @@ export default function Home() {
             <span className="font-black text-xl tracking-tighter">TED<span className="text-accent">Master</span></span>
             <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">{t.footer}</p>
           </div>
-          <div className="flex gap-4">
-            <div className="w-10 h-10 rounded-full border-2 border-border flex items-center justify-center font-black bg-tertiary shadow-pop">T</div>
-            <div className="w-10 h-10 rounded-full border-2 border-border flex items-center justify-center font-black bg-secondary shadow-pop">E</div>
-            <div className="w-10 h-10 rounded-full border-2 border-border flex items-center justify-center font-black bg-accent shadow-pop">D</div>
+          <div className="flex flex-col items-center md:items-end gap-3">
+            <div className="flex gap-3">
+              <div className="w-10 h-10 rounded-full border-2 border-border flex items-center justify-center font-black bg-tertiary shadow-pop">T</div>
+              <div className="w-10 h-10 rounded-full border-2 border-border flex items-center justify-center font-black bg-secondary shadow-pop">E</div>
+              <div className="w-10 h-10 rounded-full border-2 border-border flex items-center justify-center font-black bg-accent text-white shadow-pop">D</div>
+            </div>
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+              &copy; {new Date().getFullYear()} TEDMaster
+            </p>
           </div>
         </div>
       </footer>

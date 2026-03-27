@@ -1,15 +1,21 @@
 import { PrismaClient } from "@prisma/client";
 
-const globalForPrisma = global as unknown as { prisma: PrismaClient };
+// Fail fast at startup if required environment variables are missing.
+// Never provide fallback values — a missing secret must be an unrecoverable error,
+// not silently replaced with a known string baked into the source code.
+if (!process.env.DATABASE_URL) {
+  throw new Error("Missing required environment variable: DATABASE_URL");
+}
+if (!process.env.JWT_SECRET) {
+  throw new Error("Missing required environment variable: JWT_SECRET");
+}
 
-// Final Safety Net: Hard-inject environment variables for Prisma 7 + Next 16 Turbopack
-if (!process.env.DATABASE_URL) process.env.DATABASE_URL = "file:./dev.db";
-if (!process.env.JWT_SECRET) process.env.JWT_SECRET = "TEDMASTER-SUPER-SECRET-123";
+const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
 export const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({
-    log: ["query"],
+    log: process.env.NODE_ENV === "development" ? ["query", "warn", "error"] : ["error"],
   });
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;

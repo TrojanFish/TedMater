@@ -10,6 +10,8 @@ export const dynamic = "force-dynamic";
 const TedUrlSchema = z.string().url().regex(/ted\.com\/talks\//);
 
 export async function POST(req: NextRequest) {
+  // Declare cacheKey outside try so the catch block can use it for stale fallback
+  let cacheKey = "";
   try {
     const { url, targetLang = "zh-cn" } = await req.json();
 
@@ -19,7 +21,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Cache key includes targetLang so different translations are cached separately
-    const cacheKey = `${url}::${targetLang}`;
+    cacheKey = `${url}::${targetLang}`;
     const cached = parseCache.get(cacheKey);
     if (cached) {
       console.log("[TED Parser] cache hit:", cacheKey);
@@ -30,6 +32,7 @@ export async function POST(req: NextRequest) {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
+      signal: AbortSignal.timeout(15_000),
     });
 
     if (!response.ok) {
@@ -103,7 +106,7 @@ export async function POST(req: NextRequest) {
       if (mp4Match) mp4Url = mp4Match[0].replace(/\\\//, '/').replace(/\\/g, '');
     }
 
-    console.log("[TED Parser] hlsUrl:", hlsUrl, "| mp4Url:", mp4Url);
+    console.log("[TED Parser] resolved video sources — hlsUrl:", !!hlsUrl, "| mp4Url:", !!mp4Url);
 
     // 2. Transcript Alignment
     let englishCues: any[] = []; // Initialize englishCues here
@@ -131,7 +134,7 @@ export async function POST(req: NextRequest) {
       const englishSub = subtitles.find((s: any) => s.language === 'en');
       if (englishSub) {
         try {
-          const vttRes = await fetch(englishSub.url);
+          const vttRes = await fetch(englishSub.url, { signal: AbortSignal.timeout(10_000) });
           const vttText = await vttRes.text();
           // Basic VTT parsing (simplified for this example, full parser would be more complex)
           const lines = vttText.split('\n');
@@ -168,7 +171,7 @@ export async function POST(req: NextRequest) {
 
     if (targetLang && targetLang !== "en") {
       try {
-        const transRes = await fetch(`${url}?language=${targetLang}`, { headers: { "User-Agent": "Mozilla/5.0" } });
+        const transRes = await fetch(`${url}?language=${targetLang}`, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(15_000) });
         const transHtml = await transRes.text();
         const $t = cheerio.load(transHtml);
         const transDataJson = $t("#__NEXT_DATA__").html();
@@ -280,6 +283,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(result);
   } catch (error: any) {
     console.error("TED Parser Error:", error);
+    // Return stale cache on upstream failure rather than a hard error
+    const stale = parseCache.getStale(cacheKey);
+    if (stale) {
+      console.warn("[TED Parser] Returning stale cache due to error:", error.message);
+      return NextResponse.json(stale);
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

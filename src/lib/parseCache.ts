@@ -1,12 +1,9 @@
 /**
  * Simple in-process LRU cache for parsed TED page results.
- * Prevents hammering the TED website when multiple users watch the same talk.
- *
- * TTL: 1 hour — stale enough to be safe, fresh enough for URL changes.
- * Capacity: 100 entries — each entry is ~50-200 KB of JSON.
+ * TTL: 1 hour | Capacity: 100 entries (~50-200 KB each)
  */
 
-const TTL_MS = 60 * 60 * 1000; // 1 hour
+const TTL_MS = 60 * 60 * 1000;
 const MAX_SIZE = 100;
 
 interface CacheEntry<T> {
@@ -30,10 +27,14 @@ class LRUCache<T> {
     return entry.value;
   }
 
+  /** Return the cached value even if expired — used as stale fallback on upstream errors. */
+  getStale(key: string): T | undefined {
+    return this.map.get(key)?.value;
+  }
+
   set(key: string, value: T): void {
     if (this.map.has(key)) this.map.delete(key);
     else if (this.map.size >= MAX_SIZE) {
-      // Evict oldest entry (first key in insertion order)
       this.map.delete(this.map.keys().next().value!);
     }
     this.map.set(key, { value, expiresAt: Date.now() + TTL_MS });
@@ -44,5 +45,4 @@ class LRUCache<T> {
   }
 }
 
-// Module-level singleton — persists for the lifetime of the Node.js process
 export const parseCache = new LRUCache<unknown>();

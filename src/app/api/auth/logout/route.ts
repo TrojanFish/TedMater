@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-export async function GET() {
+export const dynamic = "force-dynamic";
+
+export async function POST() {
   const cookieStore = await cookies();
-  cookieStore.delete("ted_session");
-  return NextResponse.json({ success: true });
+  const res = NextResponse.json({ success: true });
+  res.cookies.set("ted_session", "", { maxAge: 0, path: "/" });
+  return res;
 }

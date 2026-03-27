@@ -6,10 +6,11 @@ import { X, Mail, Lock, Loader2, UserPlus, LogIn, KeyRound } from "lucide-react"
 interface Props {
   onClose: () => void;
   onSuccess: (user: any) => void;
+  initialMode?: "login" | "signup";
 }
 
-export default function AuthModal({ onClose, onSuccess }: Props) {
-  const [isLogin, setIsLogin] = useState(true);
+export default function AuthModal({ onClose, onSuccess, initialMode = "login" }: Props) {
+  const [isLogin, setIsLogin] = useState(initialMode !== "signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [activationCode, setActivationCode] = useState("");

@@ -1,6 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 
+export const dynamic = "force-dynamic";
+
+// SSRF protection — only TED CDN domains allowed (same list as proxy-m3u8 and extract-audio)
+const ALLOWED_HOSTS = [
+  "hls.ted.com",
+  "tedcdn.com",
+  "assets.ted.com",
+  "pa.tedcdn.com",
+  "download.ted.com",
+  "www.ted.com",  // /talks/*/download endpoint
+];
+
+function isAllowedUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    return (
+      (u.protocol === "https:" || u.protocol === "http:") &&
+      ALLOWED_HOSTS.some(h => u.hostname === h || u.hostname.endsWith("." + h))
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function GET(req: NextRequest) {
   if (!checkRateLimit(getClientIp(req), { windowMs: 60_000, max: 30 })) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });
@@ -13,8 +37,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "No URL provided" }, { status: 400 });
   }
 
+  // SSRF guard — reject requests to disallowed hosts
+  if (!isAllowedUrl(audioUrl)) {
+    return NextResponse.json({ error: "URL not allowed" }, { status: 403 });
+  }
+
   try {
-    console.log("[Audio Proxy] Fetching (Mobile Simulation):", audioUrl);
     const response = await fetch(audioUrl, {
       method: "GET",
       headers: {
@@ -33,13 +61,18 @@ export async function GET(req: NextRequest) {
 
     const contentType = response.headers.get("content-type") || "";
     if (contentType.includes("text/html")) {
-      console.error("[Audio Proxy] Blocked! Received HTML instead of binary.");
       throw new Error("TED Blocked proxy (Received HTML). Please try fallback.");
+    }
+
+    // Reject suspiciously large responses (>500 MB) to prevent server OOM
+    const contentLength = response.headers.get("content-length");
+    const MAX_BYTES = 500 * 1024 * 1024;
+    if (contentLength && parseInt(contentLength, 10) > MAX_BYTES) {
+      throw new Error("Response too large");
     }
 
     // Use streaming for large files
     const stream = response.body;
-    console.log(`[Audio Proxy] Success, streaming back ${contentType || 'data'}...`);
 
     const headers = new Headers();
     if (contentType) headers.set("content-type", contentType);
@@ -52,10 +85,9 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: any) {
     console.error("[Audio Proxy Error]:", error);
-    return NextResponse.json({ 
-      error: "Audio Proxy failed", 
+    return NextResponse.json({
+      error: "Audio Proxy failed",
       details: error.message,
-      url: audioUrl 
     }, { status: 500 });
   }
 }
