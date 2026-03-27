@@ -146,6 +146,7 @@ git pull origin main
 
 # 2. 重新构建镜像 (如 Dockerfile 或代码有改动)
 docker compose build
+docker compose build --no-cache tedmaster (不使用缓存)
 
 # 3. 运行数据库迁移 (应用表结构改动)
 docker compose run --rm migrate

@@ -296,67 +296,71 @@ export default function Home() {
           </div>
 
           {featuredLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="rounded-2xl overflow-hidden border" style={{ background: "var(--bg-2)", borderColor: "var(--border)" }}>
-                  <div className="aspect-video w-full animate-pulse" style={{ background: "var(--bg-3)" }} />
-                  <div className="p-3 space-y-2">
-                    <div className="h-3 rounded animate-pulse w-4/5" style={{ background: "var(--bg-3)" }} />
-                    <div className="h-2.5 rounded animate-pulse w-2/5" style={{ background: "var(--bg-3)" }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {featured.map(talk => (
-                <button
-                  key={talk.url}
-                  onClick={() => navigate(talk.url)}
-                  className="group text-left rounded-2xl overflow-hidden border transition-all hover:-translate-y-0.5"
-                  style={{ background: "var(--bg-2)", borderColor: "var(--border)" }}
-                  onMouseEnter={e => (e.currentTarget.style.borderColor = "var(--accent)")}
-                  onMouseLeave={e => (e.currentTarget.style.borderColor = "var(--border)")}
-                >
-                  {/* Thumbnail */}
-                  <div className="relative w-full aspect-video overflow-hidden" style={{ background: "var(--bg-3)" }}>
-                    {talk.thumbnail ? (
-                      <img
-                        src={talk.thumbnail}
-                        alt={talk.title}
-                        className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Play size={28} style={{ color: "var(--text-3)" }} />
-                      </div>
-                    )}
-                    {talk.duration > 0 && (
-                      <span
-                        className="absolute bottom-1.5 right-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold"
-                        style={{ background: "rgba(0,0,0,0.75)", color: "#fff" }}
-                      >
-                        <Clock size={9} />
-                        {fmtDuration(talk.duration)}
-                      </span>
-                    )}
-                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: "rgba(0,0,0,0.35)" }}>
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "var(--accent)" }}>
-                        <Play size={16} fill="white" style={{ color: "white" }} />
-                      </div>
+            <div className="overflow-x-auto pb-2" style={{ scrollbarWidth: "thin" }}>
+              <div className="flex gap-3" style={{ width: "max-content" }}>
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="rounded-2xl overflow-hidden border flex-shrink-0" style={{ background: "var(--bg-2)", borderColor: "var(--border)", width: 280 }}>
+                    <div className="animate-pulse" style={{ aspectRatio: "16/9", background: "var(--bg-3)" }} />
+                    <div className="p-3 space-y-2">
+                      <div className="h-3 rounded animate-pulse w-4/5" style={{ background: "var(--bg-3)" }} />
+                      <div className="h-2.5 rounded animate-pulse w-2/5" style={{ background: "var(--bg-3)" }} />
                     </div>
                   </div>
-                  {/* Info */}
-                  <div className="p-3">
-                    <p className="text-sm font-bold leading-snug line-clamp-2 mb-1" style={{ color: "var(--text)" }}>
-                      {talk.title}
-                    </p>
-                    <p className="text-xs truncate" style={{ color: "var(--text-3)" }}>
-                      {talk.presenter}
-                    </p>
-                  </div>
-                </button>
-              ))}
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto pb-2" style={{ scrollbarWidth: "thin" }}>
+              <div className="flex gap-3" style={{ width: "max-content" }}>
+                {featured.map(talk => (
+                  <button
+                    key={talk.url}
+                    onClick={() => navigate(talk.url)}
+                    className="group text-left rounded-2xl overflow-hidden border transition-all hover:-translate-y-0.5 flex-shrink-0"
+                    style={{ background: "var(--bg-2)", borderColor: "var(--border)", width: 280 }}
+                    onMouseEnter={e => (e.currentTarget.style.borderColor = "var(--accent)")}
+                    onMouseLeave={e => (e.currentTarget.style.borderColor = "var(--border)")}
+                  >
+                    {/* Thumbnail */}
+                    <div className="relative overflow-hidden" style={{ aspectRatio: "16/9", background: "var(--bg-3)" }}>
+                      {talk.thumbnail ? (
+                        <img
+                          src={talk.thumbnail}
+                          alt={talk.title}
+                          className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Play size={28} style={{ color: "var(--text-3)" }} />
+                        </div>
+                      )}
+                      {talk.duration > 0 && (
+                        <span
+                          className="absolute bottom-1.5 right-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold"
+                          style={{ background: "rgba(0,0,0,0.75)", color: "#fff" }}
+                        >
+                          <Clock size={9} />
+                          {fmtDuration(talk.duration)}
+                        </span>
+                      )}
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: "rgba(0,0,0,0.35)" }}>
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "var(--accent)" }}>
+                          <Play size={16} fill="white" style={{ color: "white" }} />
+                        </div>
+                      </div>
+                    </div>
+                    {/* Info */}
+                    <div className="p-3">
+                      <p className="text-sm font-bold leading-snug line-clamp-2 mb-1" style={{ color: "var(--text)" }}>
+                        {talk.title}
+                      </p>
+                      <p className="text-xs truncate" style={{ color: "var(--text-3)" }}>
+                        {talk.presenter}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
