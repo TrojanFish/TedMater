@@ -10,10 +10,22 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
-    const { email, password } = await req.json();
+    const { email, password, activationCode } = await req.json();
 
     if (!email || !password) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
+    }
+    if (!activationCode) {
+      return NextResponse.json({ error: "Activation code is required" }, { status: 400 });
+    }
+
+    // Validate activation code
+    const code = await prisma.activationCode.findUnique({ where: { code: activationCode } });
+    if (!code) {
+      return NextResponse.json({ error: "Invalid activation code" }, { status: 400 });
+    }
+    if (code.usedById) {
+      return NextResponse.json({ error: "Activation code has already been used" }, { status: 400 });
     }
 
     const existing = await prisma.user.findUnique({ where: { email } });
@@ -22,34 +34,39 @@ export async function POST(req: Request) {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await prisma.user.create({
-      data: {
-        email,
-        passwordHash,
-        credits: 100, // Initial free credits
-      },
+
+    // Create user and mark code as used in a transaction
+    const user = await prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: { email, passwordHash, credits: 100 },
+      });
+      await tx.activationCode.update({
+        where: { id: code.id },
+        data: { usedById: newUser.id, usedAt: new Date() },
+      });
+      return newUser;
     });
 
     const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: "7d" });
 
-    const response = NextResponse.json({ 
-      user: { id: user.id, email: user.email, credits: user.credits } 
+    const response = NextResponse.json({
+      user: { id: user.id, email: user.email, credits: user.credits },
     });
-    
+
     response.cookies.set("ted_session", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-      path: "/"
+      secure: process.env.NODE_ENV === "production" && req.url.startsWith("https"),
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 7,
+      path: "/",
     });
 
     return response;
   } catch (error: any) {
     console.error("[SIGNUP ERROR]", error);
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: error.message || "Internal Server Error",
-      stack: process.env.NODE_ENV === "development" ? error.stack : undefined
+      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
     }, { status: 500 });
   }
 }
