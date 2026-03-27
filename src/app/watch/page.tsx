@@ -1295,39 +1295,35 @@ function WatchContent() {
                 <span className="text-[10px] font-bold text-indigo-500 animate-pulse">{transcribeStatus || t.aiTranscribing}</span>
               </div>
             )}
-            <span className="ml-auto text-xs" style={{ color: "var(--text-3)" }}>{data?.transcript?.length ?? 0}</span>
-          </div>
-          <div ref={transcriptScrollRef} className="flex-1 overflow-y-auto custom-scrollbar p-3">
-            {/* AI Translate banner — shown when TED has no official translation for the selected language */}
+
+            {/* AI Translate (if official sub is missing) */}
             {data?.isTranslationMissing && subtitleLang !== "en" && (
-              <div className="rounded-xl p-3 mb-2 flex items-center gap-3"
-                style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}>
-                <Sparkles size={14} style={{ color: "var(--accent)", flexShrink: 0 }} />
-                <p className="flex-1 text-xs leading-snug" style={{ color: "var(--text-2)" }}>
-                  {lang === "en"
-                    ? `No official translation available for this language.`
-                    : `此视频暂无该语言的官方译文。`}
-                </p>
+              <div className="ml-auto flex items-center gap-2">
+                <span className="hidden xl:inline text-[10px] whitespace-nowrap" style={{ color: "var(--text-3)" }}>
+                  {lang === "en" ? "No official sub" : "暂无官方字幕"}
+                </span>
                 {user ? (
                   <button onClick={handleAiTranslate} disabled={isAiTranslating}
-                    className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all border shrink-0"
                     style={{
                       background: isAiTranslating ? "var(--bg-3)" : "var(--accent-s)",
                       color: isAiTranslating ? "var(--text-3)" : "var(--accent)",
-                      border: "1px solid var(--accent)",
+                      borderColor: "var(--accent)",
                       opacity: isAiTranslating ? 0.7 : 1,
                     }}>
                     {isAiTranslating
-                      ? <><Loader2 size={11} className="animate-spin" />{t.aiTranslating}</>
-                      : <><Sparkles size={11} />{t.aiTranslate} · {AI_TRANSLATE_COST} pts</>}
+                      ? <><Loader2 size={10} className="animate-spin" /> {t.aiTranslating}</>
+                      : <><Sparkles size={10} /> {t.aiTranslate} · {AI_TRANSLATE_COST}</>}
                   </button>
                 ) : (
-                  <span className="text-xs" style={{ color: "var(--text-3)" }}>
-                    {lang === "en" ? "Login to translate" : "登录后可翻译"}
-                  </span>
+                  <span className="text-[10px]" style={{ color: "var(--text-3)" }}>{t.login}</span>
                 )}
               </div>
             )}
+            
+            {!data?.isTranslationMissing && <span className="ml-auto text-xs" style={{ color: "var(--text-3)" }}>{data?.transcript?.length ?? 0}</span>}
+          </div>
+          <div ref={transcriptScrollRef} className="flex-1 overflow-y-auto custom-scrollbar p-3">
             <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}>
             {rowVirtualizer.getVirtualItems().map(vRow => {
               const idx = vRow.index;
