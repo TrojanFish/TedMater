@@ -17,7 +17,10 @@
 - `git clone https://github.com/TrojanFish/TedMater.git`
 - `cd TedMater`
 - `cp .env.example .env`
-- 编辑 `.env`：`vi .env` (填入 `GEMINI_API_KEY` 和 `JWT_SECRET`)。
+- **编辑配置**：在宝塔面板 **文件** 管理器中双击并编辑 `.env` 文件，填写以下 **3 个关键字段**：
+  - `GEMINI_API_KEY`：您的 Google AI 秘钥。
+  - `JWT_SECRET`：生成的长随机字符串（用户 Token 加密）。
+  - `POSTGRES_PASSWORD`：设置一个复杂的数据库密码（系统会自动基于此密码建立连接）。
 
 ### 3. 一键部署
 - 在项目根目录运行：
