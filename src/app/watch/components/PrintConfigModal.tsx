@@ -31,66 +31,60 @@ export default function PrintConfigModal({
 
   return (
     <div
-      className="fixed inset-0 z-[110] flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
+      className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm rounded-3xl shadow-2xl p-7"
-        style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}
+        className="w-full max-w-sm bg-white border-4 border-border rounded-[2.5rem] shadow-pop-lg p-8 animate-in zoom-in-95 duration-300"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: "var(--accent-s)" }}>
-            <Download size={20} style={{ color: "var(--accent)" }} />
+        <div className="flex items-center gap-4 mb-8">
+          <div className="w-14 h-14 rounded-2xl bg-accent border-4 border-border shadow-pop flex items-center justify-center rotate-3 transform">
+            <Download size={28} className="text-white" strokeWidth={3} />
           </div>
           <div>
-            <h3 className="text-xl font-bold">{t.exportConfig}</h3>
-            <p className="text-[11px] opacity-40">Customize your learning PDF</p>
+            <h3 className="text-2xl font-black uppercase tracking-tight text-foreground">{t.exportConfig}</h3>
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-60">Personalized Learning PDF</p>
           </div>
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-4">
           {options.map(opt => (
             <label
               key={opt.id}
-              className="flex items-center justify-between p-4 rounded-2xl cursor-pointer transition-all border border-transparent hover:border-accent/20"
-              style={{ background: "var(--bg-3)" }}
+              className={`flex items-center justify-between p-4 rounded-2xl cursor-pointer transition-all border-2
+                ${printConfig[opt.id] ? "bg-tertiary/10 border-border shadow-pop-active translate-y-[-2px]" : "bg-muted/30 border-muted hover:border-border"}`}
             >
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-white/5 opacity-60">{opt.icon}</div>
-                <span className="text-sm font-semibold">{opt.label}</span>
+              <div className="flex items-center gap-4">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center border-2
+                   ${printConfig[opt.id] ? "bg-white border-border" : "bg-white/50 border-muted"} transition-all`}>
+                   {opt.icon}
+                </div>
+                <div>
+                   <span className="text-sm font-black uppercase tracking-tight block">{opt.label}</span>
+                   <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">{opt.count} Items</span>
+                </div>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] font-mono opacity-30">{opt.count}</span>
-                <input
-                  type="checkbox"
-                  checked={printConfig[opt.id]}
-                  onChange={e => onChange({ ...printConfig, [opt.id]: e.target.checked })}
-                  className="w-5 h-5 rounded-lg appearance-none cursor-pointer transition-all border-2"
-                  style={{
-                    accentColor: "var(--accent)",
-                    borderColor: printConfig[opt.id] ? "var(--accent)" : "rgba(255,255,255,0.1)",
-                    background: printConfig[opt.id] ? "var(--accent)" : "transparent",
-                  }}
-                />
-              </div>
+              <input
+                type="checkbox"
+                checked={printConfig[opt.id]}
+                onChange={e => onChange({ ...printConfig, [opt.id]: e.target.checked })}
+                className="w-6 h-6 rounded-lg border-2 border-border cursor-pointer accent-accent"
+              />
             </label>
           ))}
         </div>
 
-        <div className="flex gap-4 mt-8">
+        <div className="flex gap-4 mt-10">
           <button
             onClick={onClose}
-            className="flex-1 py-3 rounded-2xl text-sm font-bold transition-all hover:bg-white/5"
-            style={{ color: "var(--text-3)" }}
+            className="flex-1 py-4 text-xs font-black uppercase tracking-widest text-muted-foreground hover:text-foreground transition-all"
           >
             {t.close}
           </button>
           <button
             onClick={onConfirm}
-            className="flex-[2] py-3 rounded-2xl text-sm font-black text-white shadow-xl transition-all hover:-translate-y-0.5 active:translate-y-0"
-            style={{ background: "var(--accent)", boxShadow: "0 10px 25px -5px rgba(230,43,30,0.4)" }}
+            className="btn-candy flex-[2] bg-accent text-white py-4 text-sm font-black uppercase tracking-widest"
           >
             {t.confirmPrint}
           </button>

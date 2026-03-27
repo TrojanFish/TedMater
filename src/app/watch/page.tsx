@@ -857,7 +857,7 @@ function WatchContent() {
       )}
 
       {/* ── Header ─────────────────────────────────────────────── */}
-      <header className="sticky top-4 mx-4 sm:mx-8 z-[100] flex items-center justify-between px-6 py-3 bg-white border-2 border-border rounded-2xl shadow-pop">
+      <header className="sticky top-4 mx-4 sm:mx-8 z-[100] flex items-center justify-between px-6 py-3 bg-white border-2 border-border rounded-2xl shadow-pop print-hidden">
         <Link href="/" className="flex items-center gap-3 group">
           <div className="w-10 h-10 bg-accent border-2 border-border rounded-xl shadow-pop flex items-center justify-center -rotate-6 group-hover:rotate-0 transition-transform">
             <Zap className="text-white fill-white" size={20} strokeWidth={2.5} />
