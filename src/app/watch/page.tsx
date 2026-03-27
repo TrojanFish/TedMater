@@ -884,6 +884,11 @@ function WatchContent() {
 
         <div className="flex items-center gap-4">
           <div className="hidden sm:flex items-center gap-2">
+            <button onClick={() => setShowVocab(true)}
+              className="w-10 h-10 flex items-center justify-center bg-white border-2 border-border rounded-xl shadow-pop hover:scale-105 active:scale-95 transition-all text-foreground"
+              title={t.wordsTab}>
+              <BookMarked size={18} strokeWidth={2.5} />
+            </button>
             <button onClick={() => setShowMoreMenu(!showMoreMenu)}
               className="w-10 h-10 flex items-center justify-center bg-white border-2 border-border rounded-xl shadow-pop hover:scale-105 active:scale-95 transition-all">
               <Settings size={18} strokeWidth={2.5} className="text-foreground" />
@@ -931,12 +936,6 @@ function WatchContent() {
                       <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Account</p>
                       <p className="text-sm font-black text-foreground truncate">{user?.email}</p>
                     </div>
-                    
-                    <button onClick={() => { setShowVocab(true); setShowUserMenu(false); }}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-sm font-black text-foreground hover:bg-tertiary/10 transition-colors uppercase tracking-widest">
-                      <BookMarked size={16} strokeWidth={2.5} className="text-tertiary" />
-                      {t.wordsTab} ({vocabWords.length})
-                    </button>
 
                     <button onClick={handleLogout}
                       className="w-full flex items-center gap-3 px-4 py-3 text-sm font-black text-secondary hover:bg-secondary/10 transition-colors uppercase tracking-widest border-t-2 border-muted">
@@ -1091,17 +1090,19 @@ function WatchContent() {
                 </div>
               </div>
 
-              {/* Settings Overlay - Positioned over the player area */}
+              {/* Settings Modal - Centered with backdrop */}
               {showSettings && (
-                <div className="absolute bottom-24 right-6 z-[60] w-full max-w-sm card-sticker bg-white p-6 shadow-pop-lg animate-in zoom-in-95 duration-200 overflow-hidden border-4 border-border">
-                  <div className="flex items-center justify-between mb-4 pb-2 border-b-2 border-muted">
-                    <h3 className="font-black uppercase tracking-widest text-sm text-foreground flex items-center gap-2">
-                       <Sliders size={16} className="text-secondary" /> {t.settings}
-                    </h3>
-                    <button onClick={() => setShowSettings(false)} className="text-muted-foreground hover:text-foreground">
-                      <X size={20} />
-                    </button>
-                  </div>
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                  <div className="fixed inset-0 cursor-pointer" onClick={() => setShowSettings(false)} />
+                  <div className="relative w-full max-w-sm card-sticker bg-white p-6 shadow-pop-lg animate-in zoom-in-95 duration-200 overflow-hidden border-4 border-border">
+                    <div className="flex items-center justify-between mb-4 pb-2 border-b-2 border-muted">
+                      <h3 className="font-black uppercase tracking-widest text-sm text-foreground flex items-center gap-2">
+                         <Sliders size={16} className="text-secondary" /> {t.settings}
+                      </h3>
+                      <button onClick={() => setShowSettings(false)} className="text-muted-foreground hover:text-foreground p-1 hover:bg-muted rounded-lg transition-colors">
+                        <X size={20} />
+                      </button>
+                    </div>
 
                   <div className="space-y-6 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
                     <div className="space-y-4">
@@ -1171,7 +1172,8 @@ function WatchContent() {
                     </div>
                   </div>
                 </div>
-              )}
+              </div>
+            )}
             </div>
           </div>
         </section>
