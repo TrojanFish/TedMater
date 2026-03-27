@@ -859,7 +859,14 @@ function WatchContent() {
           </span>
         </Link>
 
-        {/* Header content continues... */}
+        {/* Centered Title */}
+        <div className="hidden lg:flex flex-1 mx-8 items-center justify-center min-w-0">
+          <div className="px-5 py-2.5 bg-background border-2 border-border rounded-xl shadow-pop max-w-[500px] w-full flex items-center gap-3 overflow-hidden hover:transform-none">
+             <div className="w-2.5 h-2.5 rounded-full bg-accent animate-pulse shrink-0" />
+             <span className="text-sm font-black text-foreground truncate uppercase tracking-tighter italic">{data?.title || t.tagline}</span>
+          </div>
+        </div>
+
         <div className="flex items-center gap-4">
           <div className="hidden sm:flex items-center gap-2">
             <button onClick={() => setShowMoreMenu(!showMoreMenu)}
@@ -962,11 +969,11 @@ function WatchContent() {
       )}
 
       {/* ── Main layout ────────────────────────────────────────── */}
-      <main className="flex-1 flex flex-col lg:flex-row gap-6 p-4 sm:p-8 relative z-10 overflow-hidden print-hidden">
+      <main className="flex-1 flex flex-col lg:flex-row gap-6 p-4 sm:p-8 relative z-10 lg:h-[calc(100vh-140px)] min-h-0 overflow-hidden print-hidden">
 
         {/* ── Video player ─────────────────────────────────────── */}
-        <section className="flex-[3] flex flex-col gap-4 min-w-0">
-          <div className="card-sticker bg-black p-0 overflow-hidden shadow-pop-lg animate-in fade-in slide-in-from-left-8 duration-500">
+        <section className="flex-[3] flex flex-col gap-4 min-w-0 h-full">
+          <div className="card-sticker bg-black p-0 overflow-hidden shadow-pop-lg h-full hover:transform-none animate-in fade-in slide-in-from-left-8 duration-500">
             {/* Video */}
             <div className="aspect-video relative flex items-center justify-center bg-black">
               <video
@@ -1055,88 +1062,81 @@ function WatchContent() {
                   </button>
                 </div>
               </div>
+
+              {/* Settings Overlay - Positioned over the player area */}
+              {showSettings && (
+                <div className="absolute bottom-24 right-6 z-[60] w-full max-w-sm card-sticker bg-white p-6 shadow-pop-lg animate-in zoom-in-95 duration-200 overflow-hidden border-4 border-border">
+                  <div className="flex items-center justify-between mb-4 pb-2 border-b-2 border-muted">
+                    <h3 className="font-black uppercase tracking-widest text-sm text-foreground flex items-center gap-2">
+                       <Sliders size={16} className="text-secondary" /> {t.settings}
+                    </h3>
+                    <button onClick={() => setShowSettings(false)} className="text-muted-foreground hover:text-foreground">
+                      <X size={20} />
+                    </button>
+                  </div>
+
+                  <div className="space-y-6 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                    <div className="space-y-4">
+                      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{t.typographyLabel || 'Typography'}</p>
+                      <div className="grid grid-cols-1 gap-4">
+                        {[{ label: t.mainSize, value: mainFontSize, set: setMainFontSize, min: 14, max: 36 },
+                          { label: t.subSize, value: subFontSize, set: setSubFontSize, min: 10, max: 26 }].map(s => (
+                          <div key={s.label} className="space-y-2">
+                            <div className="flex justify-between text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+                              <span>{s.label}</span><span>{s.value}px</span>
+                            </div>
+                            <input type="range" min={s.min} max={s.max} value={s.value} onChange={e => s.set(Number(e.target.value))} 
+                              className="w-full h-1.5 bg-muted rounded-full accent-accent cursor-pointer" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                        <span>{t.syncOffset}</span>
+                        <span className="text-accent">{(subtitleOffset / 1000).toFixed(1)}s</span>
+                      </div>
+                      <input type="range" min={-5000} max={5000} step={100} value={subtitleOffset} onChange={e => setSubtitleOffset(Number(e.target.value))} 
+                        className="w-full h-1.5 bg-muted rounded-full accent-secondary cursor-pointer" />
+                    </div>
+
+                    <div className="space-y-4">
+                      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{t.subtitleLangLabel}</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {SUBTITLE_LANGS.map(l => (
+                          <button key={l.value}
+                            onClick={() => handleSubtitleLangChange(l.value)}
+                            className={`px-2 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border-2
+                              ${subtitleLang === l.value ? "bg-tertiary border-border shadow-pop text-foreground" : "bg-white border-muted text-muted-foreground hover:border-border"}`}>
+                            {l.short}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{t.playbackRate || 'Speed'}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {SPEEDS.map(r => (
+                          <button key={r} onClick={() => { if (videoRef.current) videoRef.current.playbackRate = r; setPlaybackRate(r); }}
+                            className={`w-10 h-8 flex items-center justify-center rounded-lg font-black text-[10px] border-2 transition-all
+                              ${playbackRate === r ? "bg-quaternary border-border shadow-pop translate-y-[-1px]" : "bg-white border-muted text-muted-foreground hover:border-border"}`}>
+                            {r}×
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-          
-          {/* Settings Overlay (Portal-like relative positioning) */}
-          {showSettings && (
-            <div className="card-sticker bg-white p-6 shadow-pop-lg animate-in zoom-in-95 duration-200">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="font-black uppercase tracking-widest text-lg text-foreground flex items-center gap-2">
-                   <Sliders size={20} className="text-secondary" /> {t.settings}
-                </h3>
-                <button onClick={() => setShowSettings(false)} className="text-muted-foreground hover:text-foreground">
-                  <X size={24} />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-6">
-                  <div className="space-y-4">
-                    <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">{t.typographyLabel || 'Typography'}</p>
-                    <div className="grid grid-cols-2 gap-4">
-                      {[{ label: t.mainSize, value: mainFontSize, set: setMainFontSize, min: 14, max: 36 },
-                        { label: t.subSize, value: subFontSize, set: setSubFontSize, min: 10, max: 26 }].map(s => (
-                        <div key={s.label} className="space-y-2">
-                          <div className="flex justify-between text-[11px] font-black uppercase tracking-wider text-muted-foreground">
-                            <span>{s.label}</span><span>{s.value}px</span>
-                          </div>
-                          <input type="range" min={s.min} max={s.max} value={s.value} onChange={e => s.set(Number(e.target.value))} 
-                            className="w-full h-1.5 bg-muted rounded-full accent-accent cursor-pointer" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center text-xs font-black uppercase tracking-widest text-muted-foreground">
-                      <span>{t.syncOffset}</span>
-                      <span className="text-accent">{(subtitleOffset / 1000).toFixed(1)}s</span>
-                    </div>
-                    <input type="range" min={-5000} max={5000} step={100} value={subtitleOffset} onChange={e => setSubtitleOffset(Number(e.target.value))} 
-                      className="w-full h-1.5 bg-muted rounded-full accent-secondary cursor-pointer" />
-                    <div className="flex justify-between text-[10px] font-bold text-muted-foreground/50">
-                      <span>-5.0s</span><span>0.0s</span><span>+5.0s</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-6">
-                  <div className="space-y-4">
-                    <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">{t.subtitleLangLabel}</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {SUBTITLE_LANGS.map(l => (
-                        <button key={l.value}
-                          onClick={() => handleSubtitleLangChange(l.value)}
-                          className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border-2
-                            ${subtitleLang === l.value ? "bg-tertiary border-border shadow-pop text-foreground" : "bg-white border-muted text-muted-foreground hover:border-border"}`}>
-                          {l.short}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">{t.playbackRate || 'Speed'}</p>
-                    <div className="flex flex-wrap gap-2">
-                      {SPEEDS.map(r => (
-                        <button key={r} onClick={() => { if (videoRef.current) videoRef.current.playbackRate = r; setPlaybackRate(r); }}
-                          className={`w-12 h-10 flex items-center justify-center rounded-xl font-black text-xs border-2 transition-all
-                            ${playbackRate === r ? "bg-quaternary border-border shadow-pop translate-y-[-2px]" : "bg-white border-muted text-muted-foreground hover:border-border"}`}>
-                          {r}×
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </section>
 
         {/* ── Transcript panel ──────────────────────────────────── */}
         <section className="flex-[2] flex flex-col gap-4 min-w-0 h-full">
-          <div className="card-sticker bg-white flex flex-col p-0 overflow-hidden shadow-pop-lg h-full animate-in fade-in slide-in-from-right-8 duration-500 delay-100">
+          <div className="card-sticker bg-white flex flex-col p-0 overflow-hidden shadow-pop-lg h-full hover:transform-none animate-in fade-in slide-in-from-right-8 duration-500 delay-100">
             <div className="px-6 py-4 border-b-2 border-border flex items-center justify-between bg-white sticky top-0 z-20">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-secondary border-2 border-border rounded-xl shadow-pop flex items-center justify-center">
@@ -1183,8 +1183,8 @@ function WatchContent() {
                         onClick={() => { if (!hasInteracted) setHasInteracted(true); if (videoRef.current) { videoRef.current.currentTime = (item.startTime - subtitleOffset) / 1000; videoRef.current.play(); } }}
                         className={`group/item p-4 rounded-2xl border-2 transition-all cursor-pointer relative
                           ${isActive 
-                            ? "bg-white border-border shadow-pop-lg translate-x-1" 
-                            : "bg-white/60 border-muted hover:bg-white hover:border-border hover:shadow-pop"}`}>
+                            ? "bg-white border-border shadow-pop-lg z-10" 
+                            : "bg-white/60 border-muted hover:bg-white hover:border-border"}`}>
                         
                         {/* Status Dots */}
                         <div className="absolute left-0 top-1/2 -translate-x-3 -translate-y-1/2 flex flex-col gap-1">
