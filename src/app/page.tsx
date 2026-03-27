@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Zap, Mic, BookOpen, Sun, Moon, ChevronDown, LogIn, User, LogOut, Clock, Play, Loader2 } from "lucide-react";
+import { Search, Zap, Mic, BookOpen, Sun, Moon, ChevronDown, LogIn, User, LogOut, Clock, Play } from "lucide-react";
 import AuthModal from "@/components/AuthModal";
 import { useApp, LANGS } from "@/lib/i18n";
-import type { SearchResult } from "@/app/api/search/route";
+import type { FeaturedTalk } from "@/app/api/featured/route";
 
 const GithubIcon = () => (
   <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
@@ -13,11 +13,6 @@ const GithubIcon = () => (
   </svg>
 );
 
-const EXAMPLE_TALKS = [
-  { title: "Do schools kill creativity?", presenter: "Ken Robinson", url: "https://www.ted.com/talks/sir_ken_robinson_do_schools_kill_creativity" },
-  { title: "The power of vulnerability", presenter: "Brené Brown", url: "https://www.ted.com/talks/brene_brown_the_power_of_vulnerability" },
-  { title: "How great leaders inspire action", presenter: "Simon Sinek", url: "https://www.ted.com/talks/simon_sinek_how_great_leaders_inspire_action" },
-];
 
 function fmtDuration(sec: number): string {
   if (!sec) return "";
@@ -35,11 +30,9 @@ export default function Home() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [user, setUser] = useState<{ email: string; credits: number } | null>(null);
 
-  // Search state
-  const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
+  // Featured talks
+  const [featured, setFeatured] = useState<FeaturedTalk[]>([]);
+  const [featuredLoading, setFeaturedLoading] = useState(true);
 
   const router = useRouter();
 
@@ -65,15 +58,20 @@ export default function Home() {
     }).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    fetch("/api/featured")
+      .then(res => res.json())
+      .then(data => { if (Array.isArray(data.talks)) setFeatured(data.talks); })
+      .catch(() => {})
+      .finally(() => setFeaturedLoading(false));
+  }, []);
+
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     setUser(null);
     setHistory([]);
     setShowUserMenu(false);
   };
-
-  // True when the input looks like a TED talk URL (skip search, navigate directly)
-  const isTedUrl = url.includes("ted.com/talks/");
 
   const navigate = (tedUrl: string) => {
     const trimmed = tedUrl.trim();
@@ -88,61 +86,8 @@ export default function Home() {
     const trimmed = url.trim();
     if (!trimmed) return;
     setError("");
-    if (isTedUrl) {
-      navigate(trimmed);
-    }
-    // If in search mode, Enter just keeps the results visible
+    navigate(trimmed);
   };
-
-  // Debounced search triggered whenever `url` changes and is not a URL
-  useEffect(() => {
-    const trimmed = url.trim();
-
-    // Clear results if input is empty or is a URL
-    if (!trimmed || isTedUrl) {
-      setSearchResults(null);
-      setSearchLoading(false);
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      abortRef.current?.abort();
-      return;
-    }
-
-    // Too short to bother searching
-    if (trimmed.length < 2) {
-      setSearchResults(null);
-      return;
-    }
-
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-
-    debounceRef.current = setTimeout(async () => {
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      setSearchLoading(true);
-      setSearchResults(null);
-
-      try {
-        const res = await fetch(
-          `/api/search?q=${encodeURIComponent(trimmed)}`,
-          { signal: controller.signal }
-        );
-        if (!res.ok) throw new Error("search failed");
-        const data = await res.json();
-        setSearchResults(data.results ?? []);
-      } catch (err: any) {
-        if (err.name !== "AbortError") setSearchResults([]);
-      } finally {
-        setSearchLoading(false);
-      }
-    }, 400);
-
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url]);
 
   const features = [
     { icon: <Zap size={22} />, title: t.f1Title, desc: t.f1Desc },
@@ -307,154 +252,111 @@ export default function Home() {
             {t.heroSub}
           </p>
 
-          {/* Smart input: URL or search query */}
+          {/* URL input */}
           <div className="w-full flex gap-2">
             <div
               className="flex-1 flex items-center gap-3 px-4 rounded-xl border transition-colors"
               style={{ background: "var(--bg-2)", borderColor: error ? "var(--accent)" : "var(--border)" }}
             >
-              {searchLoading
-                ? <Loader2 size={16} className="animate-spin shrink-0" style={{ color: "var(--accent)" }} />
-                : <Search size={16} style={{ color: "var(--text-3)", flexShrink: 0 }} />
-              }
+              <Search size={16} style={{ color: "var(--text-3)", flexShrink: 0 }} />
               <input
                 type="text"
                 value={url}
                 onChange={e => { setUrl(e.target.value); setError(""); }}
                 onKeyDown={e => e.key === "Enter" && handleAnalyze()}
-                placeholder={t.searchPlaceholder}
+                placeholder={t.placeholder}
                 className="flex-1 bg-transparent border-none outline-none py-3 text-sm"
                 style={{ color: "var(--text)" }}
                 autoComplete="off"
                 spellCheck={false}
               />
-              {url && (
-                <button
-                  onClick={() => { setUrl(""); setSearchResults(null); setError(""); }}
-                  className="text-xs px-1 shrink-0 transition-opacity opacity-40 hover:opacity-80"
-                  style={{ color: "var(--text-3)" }}
-                >✕</button>
-              )}
             </div>
-            {/* Show Analyze button only when a URL is detected */}
-            {isTedUrl && (
-              <button
-                onClick={handleAnalyze}
-                className="px-6 py-3 rounded-xl text-sm font-bold text-white transition-all"
-                style={{ background: "var(--accent)" }}
-                onMouseEnter={e => (e.currentTarget.style.background = "var(--accent-h)")}
-                onMouseLeave={e => (e.currentTarget.style.background = "var(--accent)")}
-              >
-                {t.analyze}
-              </button>
-            )}
+            <button
+              onClick={handleAnalyze}
+              disabled={!url.trim()}
+              className="px-6 py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-40"
+              style={{ background: "var(--accent)" }}
+              onMouseEnter={e => url.trim() && (e.currentTarget.style.background = "var(--accent-h)")}
+              onMouseLeave={e => (e.currentTarget.style.background = "var(--accent)")}
+            >
+              {t.analyze}
+            </button>
           </div>
 
           {error && (
             <p className="text-sm font-medium" style={{ color: "var(--accent)" }}>{error}</p>
           )}
+        </div>
 
-          {/* Search results */}
-          {(searchLoading || searchResults !== null) && !isTedUrl && (
-            <div className="w-full flex flex-col gap-3">
-              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-3)" }}>
-                {searchLoading ? t.searching : `${t.searchResultsLabel} · ${searchResults?.length ?? 0}`}
-              </p>
+        {/* ── Featured Talks ───────────────────────────────────────── */}
+        <div className="w-full max-w-4xl flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <span className="w-1 h-5 rounded-full" style={{ background: "var(--accent)" }} />
+            <h3 className="font-bold text-base" style={{ color: "var(--text)" }}>{t.featuredTitle}</h3>
+          </div>
 
-              {!searchLoading && searchResults?.length === 0 && (
-                <p className="text-sm py-4 text-center" style={{ color: "var(--text-3)" }}>
-                  {t.noSearchResults}
-                </p>
-              )}
-
-              {!searchLoading && searchResults && searchResults.length > 0 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {searchResults.map(result => (
-                    <button
-                      key={result.url}
-                      onClick={() => navigate(result.url)}
-                      className="group text-left rounded-2xl overflow-hidden border transition-all hover:-translate-y-0.5"
-                      style={{ background: "var(--bg-2)", borderColor: "var(--border)" }}
-                      onMouseEnter={e => (e.currentTarget.style.borderColor = "var(--accent)")}
-                      onMouseLeave={e => (e.currentTarget.style.borderColor = "var(--border)")}
-                    >
-                      {/* Thumbnail */}
-                      <div className="relative w-full aspect-video overflow-hidden" style={{ background: "var(--bg-3)" }}>
-                        {result.thumbnail ? (
-                          <img
-                            src={result.thumbnail}
-                            alt={result.title}
-                            className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Play size={28} style={{ color: "var(--text-3)" }} />
-                          </div>
-                        )}
-                        {/* Duration badge */}
-                        {result.duration > 0 && (
-                          <span
-                            className="absolute bottom-1.5 right-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold"
-                            style={{ background: "rgba(0,0,0,0.75)", color: "#fff" }}
-                          >
-                            <Clock size={9} />
-                            {fmtDuration(result.duration)}
-                          </span>
-                        )}
-                        {/* Play overlay on hover */}
-                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: "rgba(0,0,0,0.35)" }}>
-                          <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "var(--accent)" }}>
-                            <Play size={16} fill="white" style={{ color: "white" }} />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Info */}
-                      <div className="p-3">
-                        <p className="text-sm font-bold leading-snug line-clamp-2 mb-1" style={{ color: "var(--text)" }}>
-                          {result.title}
-                        </p>
-                        <p className="text-xs truncate" style={{ color: "var(--text-3)" }}>
-                          {result.presenter}
-                        </p>
-                        {result.description && (
-                          <p className="text-[11px] mt-1.5 leading-relaxed line-clamp-2" style={{ color: "var(--text-3)" }}>
-                            {result.description}
-                          </p>
-                        )}
-                      </div>
-                    </button>
-                  ))}
+          {featuredLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="rounded-2xl overflow-hidden border" style={{ background: "var(--bg-2)", borderColor: "var(--border)" }}>
+                  <div className="aspect-video w-full animate-pulse" style={{ background: "var(--bg-3)" }} />
+                  <div className="p-3 space-y-2">
+                    <div className="h-3 rounded animate-pulse w-4/5" style={{ background: "var(--bg-3)" }} />
+                    <div className="h-2.5 rounded animate-pulse w-2/5" style={{ background: "var(--bg-3)" }} />
+                  </div>
                 </div>
-              )}
+              ))}
             </div>
-          )}
-
-          {/* Example talks — shown only when input is empty */}
-          {!url && (
-            <div className="w-full flex flex-col gap-2">
-              <p className="text-xs font-medium" style={{ color: "var(--text-3)" }}>{t.tryExample}</p>
-              <div className="flex flex-wrap gap-2 justify-center">
-                {EXAMPLE_TALKS.map(ex => (
-                  <button
-                    key={ex.url}
-                    onClick={() => navigate(ex.url)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all border"
-                    style={{ background: "var(--bg-2)", borderColor: "var(--border)", color: "var(--text-2)" }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.borderColor = "var(--accent)";
-                      e.currentTarget.style.color = "var(--text)";
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.borderColor = "var(--border)";
-                      e.currentTarget.style.color = "var(--text-2)";
-                    }}
-                  >
-                    <span className="font-semibold truncate max-w-[180px]">{ex.title}</span>
-                    <span style={{ color: "var(--text-3)" }}>· {ex.presenter}</span>
-                  </button>
-                ))}
-              </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {featured.map(talk => (
+                <button
+                  key={talk.url}
+                  onClick={() => navigate(talk.url)}
+                  className="group text-left rounded-2xl overflow-hidden border transition-all hover:-translate-y-0.5"
+                  style={{ background: "var(--bg-2)", borderColor: "var(--border)" }}
+                  onMouseEnter={e => (e.currentTarget.style.borderColor = "var(--accent)")}
+                  onMouseLeave={e => (e.currentTarget.style.borderColor = "var(--border)")}
+                >
+                  {/* Thumbnail */}
+                  <div className="relative w-full aspect-video overflow-hidden" style={{ background: "var(--bg-3)" }}>
+                    {talk.thumbnail ? (
+                      <img
+                        src={talk.thumbnail}
+                        alt={talk.title}
+                        className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Play size={28} style={{ color: "var(--text-3)" }} />
+                      </div>
+                    )}
+                    {talk.duration > 0 && (
+                      <span
+                        className="absolute bottom-1.5 right-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold"
+                        style={{ background: "rgba(0,0,0,0.75)", color: "#fff" }}
+                      >
+                        <Clock size={9} />
+                        {fmtDuration(talk.duration)}
+                      </span>
+                    )}
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: "rgba(0,0,0,0.35)" }}>
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "var(--accent)" }}>
+                        <Play size={16} fill="white" style={{ color: "white" }} />
+                      </div>
+                    </div>
+                  </div>
+                  {/* Info */}
+                  <div className="p-3">
+                    <p className="text-sm font-bold leading-snug line-clamp-2 mb-1" style={{ color: "var(--text)" }}>
+                      {talk.title}
+                    </p>
+                    <p className="text-xs truncate" style={{ color: "var(--text-3)" }}>
+                      {talk.presenter}
+                    </p>
+                  </div>
+                </button>
+              ))}
             </div>
           )}
         </div>
