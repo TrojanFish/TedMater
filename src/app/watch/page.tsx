@@ -866,11 +866,19 @@ function WatchContent() {
           </span>
         </Link>
 
-        {/* Centered Title */}
         <div className="hidden lg:flex flex-1 mx-8 items-center justify-center min-w-0">
-          <div className="px-5 py-2 bg-background border-2 border-border rounded-xl shadow-pop-active max-w-[500px] w-full flex items-center gap-3 overflow-hidden">
+          <div className="px-5 py-2.5 bg-background border-2 border-border rounded-xl shadow-pop-active max-w-[600px] w-full flex items-center gap-4 overflow-hidden">
              <div className="w-2.5 h-2.5 rounded-full bg-accent animate-pulse shrink-0" />
-             <span className="text-xs font-black text-foreground truncate uppercase tracking-tighter italic">{data?.title || t.tagline}</span>
+             <div className="flex flex-col min-w-0 flex-1">
+                <span className="text-[11px] font-black text-foreground truncate uppercase tracking-tight italic leading-tight">
+                  {data?.title || t.tagline}
+                </span>
+                {data?.presenter && (
+                  <span className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.2em] leading-tight mt-0.5 truncate">
+                    {data.presenter}
+                  </span>
+                )}
+             </div>
           </div>
         </div>
 
