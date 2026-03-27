@@ -1,4 +1,24 @@
-import type { VocabItem, SavedSentence } from "@/components/LearningNotebook";
+export interface VocabItem {
+  word: string;
+  phonetic: string;
+  partOfSpeech: string;
+  definitionZh: string;
+  tense?: string;
+  synonyms?: string[];
+  antonyms?: string[];
+  phrases?: string[];
+  exampleEn: string;
+  exampleZh: string;
+  addedAt: number;
+}
+
+export interface SavedSentence {
+  id: string | number;
+  english: string;
+  translated: string;
+  analysis?: any;
+  addedAt: number;
+}
 
 export interface TranscriptItem {
   id: number;
@@ -45,4 +65,3 @@ export interface PrintConfig {
   notes: boolean;
 }
 
-export type { VocabItem, SavedSentence };

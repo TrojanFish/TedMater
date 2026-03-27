@@ -3,27 +3,7 @@
 import { useState } from "react";
 import { Download, Trash2, Volume2, BookMarked, Sparkles, MessageSquare } from "lucide-react";
 import { useApp } from "@/lib/i18n";
-export interface VocabItem {
-  word: string;
-  phonetic: string;
-  partOfSpeech: string;
-  definitionZh: string;
-  tense?: string;
-  synonyms?: string[];
-  antonyms?: string[];
-  phrases?: string[];
-  exampleEn: string;
-  exampleZh: string;
-  addedAt: number;
-}
-
-export interface SavedSentence {
-  id: string | number;
-  english: string;
-  translated: string;
-  analysis?: any;
-  addedAt: number;
-}
+import type { VocabItem, SavedSentence } from "@/app/watch/types";
 
 interface Props {
   words: VocabItem[];
@@ -77,42 +57,40 @@ export default function LearningNotebook({
   const sortedSents = [...sentences].sort((a, b) => b.addedAt - a.addedAt);
 
   return (
-    <div className="flex flex-col h-full rounded-2xl shadow-2xl overflow-hidden"
-      style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}>
+    <div className="flex flex-col h-full bg-white border-2 border-border rounded-2xl shadow-pop-lg overflow-hidden">
 
       {/* Header & Tabs */}
-      <div className="shrink-0" style={{ background: "var(--bg-3)", borderBottom: "1px solid var(--border)" }}>
-        <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "var(--border)" }}>
-          <div className="flex items-center gap-2">
-            <BookMarked size={16} style={{ color: "var(--accent)" }} />
-            <span className="text-sm font-bold uppercase tracking-tight">Notebook</span>
+      <div className="shrink-0 bg-background border-b-2 border-border">
+        <div className="flex items-center justify-between px-4 py-4 border-b-2 border-border">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-accent border-2 border-border shadow-pop flex items-center justify-center -rotate-3">
+              <BookMarked size={16} className="text-white" strokeWidth={2.5} />
+            </div>
+            <span className="text-lg font-black uppercase tracking-tight text-foreground">Notebook</span>
           </div>
-          <button onClick={exportAll} disabled={words.length === 0 && sentences.length === 0 && noteEntries.length === 0}
-            className="p-1.5 rounded-lg transition-colors disabled:opacity-30"
-            style={{ color: "var(--text-2)" }}
-            onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
-            onMouseLeave={e => (e.currentTarget.style.color = "var(--text-2)")}
+          <button onClick={exportAll} 
+            disabled={words.length === 0 && sentences.length === 0 && noteEntries.length === 0}
+            className="w-10 h-10 flex items-center justify-center bg-white border-2 border-border rounded-full shadow-pop hover:scale-110 active:scale-95 transition-all disabled:opacity-30 disabled:shadow-none"
             title={t.exportLabel}>
-            <Download size={15} />
+            <Download size={18} strokeWidth={2.5} className="text-foreground" />
           </button>
         </div>
         
-        <div className="flex p-1 gap-1">
+        <div className="flex p-2 gap-2 bg-background">
           {[
-            { id: "words", label: t.wordsTab, count: words.length },
-            { id: "sentences", label: t.sentencesTab, count: sentences.length },
-            { id: "notes", label: t.notesTab, count: noteEntries.length }
+            { id: "words", label: t.wordsTab, count: words.length, color: "bg-accent" },
+            { id: "sentences", label: t.sentencesTab, count: sentences.length, color: "bg-secondary" },
+            { id: "notes", label: t.notesTab, count: noteEntries.length, color: "bg-tertiary" }
           ].map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
-              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-bold transition-all"
-              style={{ 
-                background: activeTab === tab.id ? "var(--bg-2)" : "transparent",
-                color: activeTab === tab.id ? "var(--accent)" : "var(--text-3)",
-                boxShadow: activeTab === tab.id ? "0 2px 8px var(--shadow)" : "none"
-              }}>
-              {tab.label}
-              <span className="px-1 py-0.5 rounded-md text-[9px]" 
-                style={{ background: activeTab === tab.id ? "var(--accent-s)" : "var(--bg)", opacity: 0.6 }}>
+              className={`flex-1 flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl border-2 transition-all font-black text-[10px] uppercase tracking-wider
+                ${activeTab === tab.id 
+                  ? `${tab.color} text-white border-border shadow-pop translate-y-[-2px]` 
+                  : "bg-white text-muted-foreground border-transparent hover:border-border/30"
+                }`}>
+              <span>{tab.label}</span>
+              <span className={`px-2 py-0.5 rounded-full text-[9px] border border-border/20
+                ${activeTab === tab.id ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}>
                 {tab.count}
               </span>
             </button>
@@ -121,36 +99,36 @@ export default function LearningNotebook({
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-3 bg-white dot-grid-subtle">
         {activeTab === "words" && (
           sortedWords.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center gap-3 py-16 opacity-40">
-              <BookMarked size={32} />
-              <p className="text-xs text-center whitespace-pre-line">{t.vocabEmpty}</p>
+            <div className="h-full flex flex-col items-center justify-center gap-4 py-20 opacity-30">
+              <div className="w-16 h-16 rounded-full border-2 border-dashed border-border flex items-center justify-center">
+                <BookMarked size={32} />
+              </div>
+              <p className="text-sm font-bold text-center max-w-[200px]">{t.vocabEmpty}</p>
             </div>
           ) : (
             sortedWords.map(item => (
               <div key={item.word} onClick={() => onSelectWord(item)}
-                className="p-3 rounded-xl cursor-pointer transition-all group/item"
-                onMouseEnter={e => { e.currentTarget.style.background = "var(--bg-3)"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
-                <div className="flex items-start justify-between gap-2">
+                className="p-4 bg-white border-2 border-border rounded-xl shadow-pop hover:shadow-pop-hover hover:-translate-y-1 active:translate-y-0.5 transition-all cursor-pointer group/item relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-8 h-8 bg-accent/5 rounded-bl-xl border-l border-b border-border/10 flex items-center justify-center">
+                   <Volume2 size={12} className="text-accent" />
+                </div>
+                <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-sm">{item.word}</span>
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-md font-bold"
-                        style={{ background: "var(--accent-s)", color: "var(--accent)" }}>{item.partOfSpeech}</span>
+                      <span className="font-black text-base text-foreground">{item.word}</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-black bg-accent text-white border border-border/20">{item.partOfSpeech}</span>
                     </div>
-                    <span className="text-[10px] font-mono" style={{ color: "var(--text-3)" }}>{item.phonetic}</span>
+                    <span className="text-xs font-mono font-bold text-muted-foreground">{item.phonetic}</span>
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
-                    <button onClick={e => { e.stopPropagation(); const u = new SpeechSynthesisUtterance(item.word); u.lang = "en-US"; speechSynthesis.speak(u); }}
-                      className="p-1 rounded text-text-3 hover:text-text"><Volume2 size={13} /></button>
-                    <button onClick={e => { e.stopPropagation(); onRemoveWord(item.word); }}
-                      className="p-1 rounded text-text-3 hover:text-accent"><Trash2 size={13} /></button>
-                  </div>
+                  <button onClick={e => { e.stopPropagation(); onRemoveWord(item.word); }}
+                    className="opacity-0 group-hover/item:opacity-100 p-2 rounded-lg bg-secondary/10 text-secondary hover:bg-secondary hover:text-white transition-all border border-secondary/20">
+                    <Trash2 size={14} strokeWidth={2.5} />
+                  </button>
                 </div>
-                <p className="text-xs mt-1.5 leading-snug line-clamp-1" style={{ color: "var(--text-2)" }}>{item.definitionZh}</p>
+                <p className="text-sm font-medium leading-normal text-foreground border-t border-dashed border-border/10 pt-2">{item.definitionZh}</p>
               </div>
             ))
           )
@@ -158,57 +136,57 @@ export default function LearningNotebook({
 
         {activeTab === "sentences" && (
           sortedSents.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center gap-3 py-16 opacity-40">
+            <div className="h-full flex flex-col items-center justify-center gap-4 py-20 opacity-30">
               <Sparkles size={32} />
-              <p className="text-xs text-center whitespace-pre-line">{t.sentEmpty}</p>
+              <p className="text-sm font-bold text-center max-w-[200px]">{t.sentEmpty}</p>
             </div>
           ) : (
-            sortedSents.map(sent => (
+            sortedSents.map((sent, index) => (
               <div key={sent.id} 
-                className="p-3 rounded-xl transition-all group/item mb-2"
-                style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
-                <div className="flex items-start justify-between gap-2 cursor-pointer" onClick={() => onSelectSentence(sent)}>
-                   <p className="text-xs font-bold leading-relaxed" style={{ color: "var(--text)" }}>{sent.english}</p>
+                className={`p-4 bg-white border-2 border-border rounded-xl shadow-pop transition-all group/item mb-4 
+                  ${index % 2 === 0 ? 'hover:rotate-1' : 'hover:-rotate-1'}`}>
+                <div className="flex items-start justify-between gap-3 cursor-pointer" onClick={() => onSelectSentence(sent)}>
+                   <p className="text-sm font-bold leading-relaxed text-foreground">{sent.english}</p>
                    <button onClick={e => { e.stopPropagation(); onRemoveSentence(sent.id); }}
-                      className="opacity-0 group-hover/item:opacity-100 p-1 rounded text-text-3 hover:text-accent transition-opacity shrink-0">
-                      <Trash2 size={13} />
+                      className="opacity-0 group-hover/item:opacity-100 p-2 rounded-lg bg-secondary/10 text-secondary hover:bg-secondary hover:text-white transition-all border border-secondary/20 shrink-0">
+                      <Trash2 size={14} strokeWidth={2.5} />
                    </button>
                 </div>
-                <p className="text-[11px] mt-1.5" style={{ color: "var(--text-3)" }}>{sent.translated}</p>
+                <p className="text-xs font-medium mt-2 text-muted-foreground italic border-l-2 border-accent pl-2">{sent.translated}</p>
                 
                 {/* Embedded Analysis */}
                 {sent.analysis && (
-                  <div className="mt-3 pt-2 border-t space-y-3 opacity-90" style={{ borderColor: "var(--border)" }}>
-                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-accent-s w-fit">
-                      <Sparkles size={10} className="text-accent" />
-                      <span className="text-[9px] font-bold text-accent uppercase tracking-tighter">{t.aiAnalysis}</span>
+                  <div className="mt-4 p-4 border-2 border-border rounded-xl bg-tertiary/5 space-y-4">
+                    <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-tertiary border-2 border-border shadow-pop w-fit -mt-7 ml-2">
+                       <Sparkles size={12} className="text-foreground" strokeWidth={2.5} />
+                       <span className="text-[10px] font-black text-foreground uppercase tracking-widest">{t.aiAnalysis}</span>
                     </div>
                     
-                    {/* Structure */}
                     <div>
-                      <p className="text-[9px] font-bold uppercase tracking-wider mb-1" style={{ color: "var(--accent)" }}>Structure</p>
-                      <p className="text-[10px] leading-snug" style={{ color: "var(--text-2)" }}>{sent.analysis.structureZh}</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest mb-1 text-accent">Sentence Structure</p>
+                      <p className="text-xs font-bold leading-normal text-foreground bg-white/50 p-2 rounded-lg border border-border/10">{sent.analysis.structureZh}</p>
                     </div>
 
-                    {/* Breakdown */}
-                    <div className="space-y-1">
-                      <p className="text-[9px] font-bold uppercase tracking-wider mb-1" style={{ color: "var(--text-3)" }}>Breakdown</p>
-                      {sent.analysis.breakdown?.map((b: any, i: number) => (
-                        <div key={i} className="flex gap-2 text-[9px] border-l border-accent-s pl-2">
-                           <span className="font-bold text-accent shrink-0">{b.label}:</span>
-                           <span style={{ color: "var(--text-2)" }}>{b.content}</span>
-                        </div>
-                      ))}
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Grammar Breakdown</p>
+                      <div className="grid gap-2">
+                        {sent.analysis.breakdown?.map((b: any, i: number) => (
+                          <div key={i} className="flex gap-2 text-[10px] bg-white border border-border/10 p-2 rounded-lg">
+                             <span className="font-black text-accent shrink-0">{b.label}:</span>
+                             <span className="font-medium text-foreground">{b.content}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
 
-                    {/* Insights */}
                     {sent.analysis.insights?.length > 0 && (
-                      <div className="space-y-1.5 pt-1">
-                         <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: "var(--text-3)" }}>Insights</p>
+                      <div className="space-y-2">
+                         <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Key Insights</p>
                          {sent.analysis.insights.map((ins: any, i: number) => (
-                           <div key={i} className="p-1.5 rounded bg-bg-3/50 text-[9px] space-y-0.5">
-                              <p className="font-bold text-accent-h" style={{ color: "var(--accent)" }}>{ins.title}</p>
-                              <p style={{ color: "var(--text-2)" }}>{ins.content}</p>
+                           <div key={i} className="p-3 rounded-lg bg-white border-2 border-border shadow-pop-pink relative overflow-hidden">
+                              <div className="absolute top-0 left-0 w-1 h-full bg-secondary"></div>
+                              <p className="font-black text-secondary text-[11px] mb-1">{ins.title}</p>
+                              <p className="text-[10px] font-medium text-foreground leading-normal">{ins.content}</p>
                            </div>
                          ))}
                       </div>
@@ -216,8 +194,10 @@ export default function LearningNotebook({
                   </div>
                 )}
                 
-                <div className="mt-2 flex items-center justify-end">
-                   <span className="text-[9px]" style={{ color: "var(--text-3)" }}>{new Date(sent.addedAt).toLocaleDateString()}</span>
+                <div className="mt-4 flex items-center justify-end">
+                   <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest bg-muted px-2 py-1 rounded-full">
+                    {new Date(sent.addedAt).toLocaleDateString()}
+                   </span>
                 </div>
               </div>
             ))
@@ -226,20 +206,24 @@ export default function LearningNotebook({
 
         {activeTab === "notes" && (
           noteEntries.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center gap-3 py-16 opacity-40">
+            <div className="h-full flex flex-col items-center justify-center gap-4 py-20 opacity-30">
               <MessageSquare size={32} />
-              <p className="text-xs text-center border-t border-dashed mt-4 pt-4 border-white/10">No notes written in this talk.</p>
+              <p className="text-sm font-bold text-center">No notes written in this talk.</p>
             </div>
           ) : (
             noteEntries.map(([id, note]) => (
               <div key={id} onClick={() => onSelectNote(parseInt(id))}
-                className="p-3 rounded-xl cursor-pointer transition-all border border-dashed mb-2"
-                style={{ borderColor: "var(--border)", background: "var(--bg-3)" }}>
-                <div className="flex items-center gap-2 mb-2">
-                   <div className="w-5 h-5 rounded bg-accent text-[9px] flex items-center justify-center text-white font-bold"># {id}</div>
-                   <span className="text-[10px] font-bold text-accent">{t.note}</span>
+                className="p-4 bg-background border-2 border-border border-dashed rounded-xl shadow-pop hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all cursor-pointer mb-4 relative overflow-hidden group">
+                <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-quaternary border-2 border-border flex items-center justify-center text-[10px] font-black text-foreground shadow-pop">
+                  {id}
                 </div>
-                <p className="text-[11px] leading-relaxed italic" style={{ color: "var(--text)" }}>"{note}"</p>
+                <div className="flex items-center gap-2 mb-3">
+                   <div className="p-1.5 rounded-lg bg-quaternary/20 text-quaternary border border-quaternary/30">
+                    <MessageSquare size={14} strokeWidth={2.5} />
+                   </div>
+                   <span className="text-[11px] font-black text-foreground uppercase tracking-widest">{t.note}</span>
+                </div>
+                <p className="text-sm font-medium leading-relaxed italic text-foreground bg-white/50 p-3 rounded-lg">"{note}"</p>
               </div>
             ))
           )

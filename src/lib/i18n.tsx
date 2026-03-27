@@ -70,7 +70,7 @@ const T = {
     loading: "Loading...",
     loadingTalk: "Loading talk...",
     balance: "Balance",
-    login: "Sign In",
+    login: "Login",
     logout: "Log Out",
     github: "GitHub",
     footer: "Non-commercial open source project · for English learners",
@@ -90,6 +90,8 @@ const T = {
     register: "Register",
     featuredTitle: "Featured on TED",
     featuredLoading: "Loading featured talks...",
+    typographyLabel: "Typography",
+    playbackRate: "Speed",
   },
   zh: {
     appName: "TEDMaster",
@@ -155,7 +157,7 @@ const T = {
     loading: "加载中...",
     loadingTalk: "正在加载演讲...",
     balance: "账户余额",
-    login: "登录账户",
+    login: "登录",
     logout: "安全退出",
     github: "GitHub",
     footer: "非商业开源项目 · 为英语学习者打造",
@@ -175,6 +177,8 @@ const T = {
     register: "注册",
     featuredTitle: "TED 精选演讲",
     featuredLoading: "正在加载精选演讲...",
+    typographyLabel: "排版设置",
+    playbackRate: "播放速度",
   },
   "zh-tw": {
     appName: "TEDMaster",
@@ -258,8 +262,10 @@ const T = {
     continueLearning: "繼續學習",
     tryExample: "快速體驗",
     register: "注冊",
-    featuredTitle: "TED 精選演講",
-    featuredLoading: "正在載入精選演講...",
+    featuredTitle: "精選演講",
+    featuredLoading: "載入中...",
+    typographyLabel: "排版設置",
+    playbackRate: "播放速度",
   },
   ja: {
     appName: "TEDMaster",
@@ -343,8 +349,10 @@ const T = {
     continueLearning: "学習を続ける",
     tryExample: "サンプルを試す",
     register: "登録",
-    featuredTitle: "TED 注目のトーク",
-    featuredLoading: "注目トークを読み込み中...",
+    featuredTitle: "おすすめのトーク",
+    featuredLoading: "読み込み中...",
+    typographyLabel: "タイポグラフィ",
+    playbackRate: "再生速度",
   },
 } as const;
 
@@ -369,7 +377,7 @@ const UI_TO_SUBTITLE: Record<string, string> = {
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>("en");
-  const [theme, setTheme] = useState<Theme>("dark");
+  const [theme, setTheme] = useState<Theme>("light");
   // Lazy init: read localStorage synchronously so the value is correct on first render,
   // preventing a double-fetch in the watch page.
   const [subtitleLang, setSubtitleLangState] = useState<string>(() => {

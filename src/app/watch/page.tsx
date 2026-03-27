@@ -4,9 +4,9 @@ import { useEffect, useState, useRef, useCallback, useMemo, Suspense } from "rea
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  Play, Pause, Settings, Loader2, Sparkles, X, Home,
+  Play, Pause, Settings, Loader2, Sparkles, X, Home, Download, LogIn,
   Mic, FastForward, BookMarked, Sliders,
-  FileText, Video, FileCode, Sun, Moon,
+  FileText, Video, FileCode, Sun, Moon, Zap,
   Maximize, PictureInPicture, Volume, Volume1, Volume2, Lock, LogOut, History as HistoryIcon,
   MoreHorizontal, Globe
 } from "lucide-react";
@@ -818,7 +818,15 @@ function WatchContent() {
   const printStyle = `@media print { html,body{height:auto!important;overflow:visible!important;background:white!important;color:black!important} body>div,#__next>div{height:auto!important;overflow:visible!important} .print-hidden{display:none!important} #print-view{display:block!important} @page{margin:15mm 20mm;size:A4} }`;
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
+    <div className="min-h-screen flex flex-col bg-background font-body selection:bg-tertiary selection:text-foreground overflow-x-hidden">
+      
+      {/* ── Background Decorations ────────────────────────────── */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-tertiary rounded-full mix-blend-multiply opacity-20 animate-pulse" />
+        <div className="absolute bottom-[-5%] left-[-5%] w-[30%] h-[30%] bg-secondary rounded-full mix-blend-multiply opacity-10" />
+        <div className="absolute top-[20%] left-[10%] w-12 h-12 bg-accent opacity-20 rounded-lg rotate-12" />
+        <div className="absolute inset-0 dot-grid opacity-[0.15]" />
+      </div>
 
       {/* ── Print view ── */}
       <PrintView
@@ -849,154 +857,83 @@ function WatchContent() {
       )}
 
       {/* ── Header ─────────────────────────────────────────────── */}
-      <header className="h-14 flex items-center gap-2 px-4 border-b shrink-0 print-hidden"
-        style={{ background: "var(--bg-2)", borderColor: "var(--border)" }}>
-
-        {/* Home */}
-        <Link href="/" className="p-2 rounded-lg transition-colors shrink-0"
-          style={{ color: "var(--text-2)" }}
-          onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
-          onMouseLeave={e => (e.currentTarget.style.color = "var(--text-2)")}>
-          <Home size={18} />
+      <header className="sticky top-4 mx-4 sm:mx-8 z-[100] flex items-center justify-between px-6 py-3 bg-white border-2 border-border rounded-2xl shadow-pop">
+        <Link href="/" className="flex items-center gap-3 group">
+          <div className="w-10 h-10 bg-accent border-2 border-border rounded-xl shadow-pop flex items-center justify-center -rotate-6 group-hover:rotate-0 transition-transform">
+            <Zap className="text-white fill-white" size={20} strokeWidth={2.5} />
+          </div>
+          <span className="font-black text-2xl tracking-tight text-foreground hidden sm:inline">
+            TED<span className="text-accent underline decoration-tertiary decoration-4 underline-offset-4">Master</span>
+          </span>
         </Link>
 
-        {/* Title */}
-        <div className="flex-1 min-w-0">
-          <h1 className="text-sm font-semibold truncate leading-tight" style={{ color: "var(--text)" }}>{data?.title}</h1>
-          {data?.presenter && <p className="text-[11px] truncate leading-tight" style={{ color: "var(--text-3)" }}>{t.by} {data.presenter}</p>}
+        {/* Video Title - Center */}
+        <div className="hidden lg:flex flex-1 mx-8 items-center justify-center min-w-0">
+          <div className="px-4 py-2 bg-background border-2 border-border rounded-xl shadow-pop max-w-md w-full flex items-center gap-3 overflow-hidden">
+             <div className="w-2 h-2 rounded-full bg-accent animate-pulse shrink-0" />
+             <span className="text-xs font-black text-foreground truncate uppercase tracking-tight">{data?.title || t.tagline}</span>
+          </div>
         </div>
 
-        {/* Knowledge Hub — primary action, always visible */}
-        <button onClick={() => setShowVocab(v => !v)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all shrink-0"
-          style={{ background: showVocab ? "var(--accent)" : "var(--bg-3)", color: showVocab ? "#fff" : "var(--text-2)" }}>
-          <BookMarked size={15} /><span className="hidden sm:inline">{t.vocab}</span>
-          {vocabWords.length > 0 && (
-            <span className="text-xs px-1.5 py-0.5 rounded-full"
-              style={{ background: showVocab ? "rgba(255,255,255,0.25)" : "var(--accent-s)", color: showVocab ? "#fff" : "var(--accent)" }}>
-              {vocabWords.length}
-            </span>
-          )}
-        </button>
-
-        {/* ⋯ More menu */}
-        <div className="relative shrink-0">
-          <button onClick={() => setShowMoreMenu(v => !v)}
-            className="p-2 rounded-lg transition-colors"
-            style={{ background: showMoreMenu ? "var(--bg-3)" : "transparent", color: showMoreMenu ? "var(--text)" : "var(--text-2)" }}>
-            <MoreHorizontal size={18} />
-          </button>
-
-          {showMoreMenu && (
-            <>
-              {/* Backdrop */}
-              <div className="fixed inset-0 z-[109]" onClick={() => setShowMoreMenu(false)} />
-              <div className="absolute top-full right-0 mt-2 w-64 rounded-2xl shadow-2xl z-[110] py-2 overflow-hidden"
-                style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}>
-
-                {/* Export group */}
-                <div className="px-3 pt-1 pb-0.5">
-                  <p className="text-[10px] font-bold uppercase tracking-wider px-1 mb-1" style={{ color: "var(--text-3)" }}>{t.exportLabel}</p>
+        <div className="flex items-center gap-4">
+          <div className="hidden sm:flex items-center gap-2">
+            <button onClick={() => setShowMoreMenu(!showMoreMenu)}
+              className="w-10 h-10 flex items-center justify-center bg-white border-2 border-border rounded-xl shadow-pop hover:scale-105 active:scale-95 transition-all">
+              <Settings size={18} strokeWidth={2.5} className="text-foreground" />
+            </button>
+            {showMoreMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowMoreMenu(false)} />
+                <div className="absolute right-0 top-16 bg-white border-2 border-border rounded-2xl shadow-pop-lg z-50 py-3 min-w-[240px] animate-in slide-in-from-top-4 duration-300">
+                  <div className="px-4 pb-3 border-b-2 border-muted mb-2 font-black uppercase text-[10px] text-muted-foreground tracking-widest">{t.exportLabel}</div>
                   {[
                     { icon: <Video size={14} />, label: t.downloadVideo, action: () => { if (data?.downloadUrl) { const a = document.createElement("a"); a.href = data.downloadUrl; a.download = `${data.title}.mp4`; a.target = "_blank"; a.click(); } setShowMoreMenu(false); }, disabled: !data?.downloadUrl },
                     { icon: <FileText size={14} />, label: t.exportPdf, action: () => { setShowMoreMenu(false); setShowPrintModal(true); } },
                     { icon: <FileCode size={14} />, label: t.exportSrt, action: () => { exportSRT(); setShowMoreMenu(false); } },
                   ].map((item, i) => (
                     <button key={i} onClick={item.disabled ? undefined : item.action} disabled={!!item.disabled}
-                      className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm text-left transition-colors disabled:opacity-30"
-                      style={{ color: "var(--text)" }}
-                      onMouseEnter={e => !item.disabled && (e.currentTarget.style.background = "var(--bg-3)")}
-                      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                      <span style={{ color: "var(--accent)" }}>{item.icon}</span>{item.label}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm font-black text-foreground hover:bg-tertiary/20 transition-colors uppercase tracking-widest disabled:opacity-30">
+                      <span className="text-accent">{item.icon}</span>{item.label}
                     </button>
                   ))}
-                </div>
-
-                <div className="my-1.5 mx-3 h-px" style={{ background: "var(--border)" }} />
-
-                {/* History */}
-                <div className="px-3">
+                  <div className="my-2 border-b-2 border-muted" />
                   <button onClick={() => { setShowMoreMenu(false); setShowHistory(true); }}
-                    className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm text-left transition-colors"
-                    style={{ color: "var(--text)" }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "var(--bg-3)")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                    <HistoryIcon size={14} style={{ color: "var(--accent)" }} />{t.history}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm font-black text-foreground hover:bg-secondary/10 transition-colors uppercase tracking-widest">
+                    <HistoryIcon size={16} className="text-secondary" />{t.history}
                   </button>
                 </div>
+              </>
+            )}
+          </div>
 
-                <div className="my-1.5 mx-3 h-px" style={{ background: "var(--border)" }} />
+          <div className="w-px h-6 bg-border/20 mx-1 hidden sm:block" />
 
-                {/* Preferences */}
-                <div className="px-3 pb-1">
-                  <p className="text-[10px] font-bold uppercase tracking-wider px-1 mb-1" style={{ color: "var(--text-3)" }}>{t.settings}</p>
+          {/* Account */}
+          {user ? (
+            <div className="relative">
+              <button onClick={() => setShowVocab(!showVocab)}
+                className={`flex items-center gap-2 px-4 h-10 border-2 border-border rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-pop active:shadow-none
+                  ${showVocab ? "bg-accent text-white" : "bg-white text-foreground hover:bg-muted"}`}>
+                <BookMarked size={16} strokeWidth={2.5} />
+                <span className="hidden md:inline">{t.wordsTab} ({vocabWords.length})</span>
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setShowAuth(true)} className="btn-candy h-10 px-6">
+              <LogIn size={16} strokeWidth={2.5} className="mr-2" />
+              <span className="uppercase tracking-widest text-xs font-black">{t.login}</span>
+            </button>
+          )}
 
-                  {/* Theme toggle */}
-                  <button onClick={toggleTheme}
-                    className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm transition-colors"
-                    style={{ color: "var(--text)" }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "var(--bg-3)")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                    {theme === "dark" ? <Sun size={14} style={{ color: "var(--accent)" }} /> : <Moon size={14} style={{ color: "var(--accent)" }} />}
-                    {theme === "dark" ? (lang === "en" ? "Light Mode" : "浅色模式") : (lang === "en" ? "Dark Mode" : "深色模式")}
-                  </button>
-
-                  {/* App language */}
-                  <div className="px-2 py-1.5">
-                    <p className="text-xs mb-1.5 flex items-center gap-1.5" style={{ color: "var(--text-2)" }}>
-                      <Globe size={13} style={{ color: "var(--accent)" }} />{lang === "en" ? "Language" : "界面语言"}
-                    </p>
-                    <div className="grid grid-cols-4 gap-1">
-                      {LANGS.map(l => (
-                        <button key={l.value} onClick={() => setLang(l.value)}
-                          className="py-1 rounded text-[11px] font-medium transition-all"
-                          style={{
-                            background: lang === l.value ? "var(--accent-s)" : "var(--bg)",
-                            color: lang === l.value ? "var(--accent)" : "var(--text-2)",
-                            border: `1px solid ${lang === l.value ? "var(--accent)" : "var(--border)"}`,
-                          }}>
-                          {l.short}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* GitHub */}
-                  <a href="https://github.com/TrojanFish/TedMater" target="_blank" rel="noopener noreferrer"
-                    className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm transition-colors"
-                    style={{ color: "var(--text)", display: "flex" }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "var(--bg-3)")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                    <span style={{ color: "var(--accent)" }}><GithubIcon /></span>GitHub
-                  </a>
-                </div>
-              </div>
-            </>
+          {user && (
+            <div className="flex items-center gap-2 px-3 py-1 bg-tertiary border-2 border-border rounded-xl shadow-pop">
+               <div className="w-6 h-6 rounded-lg bg-white border-2 border-border flex items-center justify-center -rotate-6">
+                  <Sparkles size={12} className="text-accent" strokeWidth={2.5} />
+               </div>
+               <span className="text-xs font-black text-foreground">{user.credits} <span className="text-[10px] text-muted-foreground ml-0.5">PTS</span></span>
+            </div>
           )}
         </div>
-
-        {/* Account pill */}
-        {user ? (
-          <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl shrink-0"
-            style={{ background: "var(--bg-3)", border: "1px solid var(--border)" }}>
-            <div className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold text-white"
-              style={{ background: "var(--accent)" }}>
-              {user.email[0].toUpperCase()}
-            </div>
-            <span className="text-[11px] font-bold" style={{ color: "var(--text)" }}>{user.credits} <span style={{ color: "var(--text-3)" }}>pts</span></span>
-            <button onClick={() => { fetch("/api/auth/logout"); setUser(null); }}
-              className="transition-opacity opacity-30 hover:opacity-80"
-              title={t.logout}>
-              <LogOut size={12} style={{ color: "var(--text)" }} />
-            </button>
-          </div>
-        ) : (
-          <button onClick={() => setShowAuth(true)}
-            className="px-3 py-1.5 rounded-lg text-xs font-bold text-white shrink-0 transition-all hover:opacity-90 active:scale-95"
-            style={{ background: "var(--accent)" }}>
-            {t.login}
-          </button>
-        )}
       </header>
       
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} onSuccess={(u) => setUser(u)} />}
@@ -1015,23 +952,23 @@ function WatchContent() {
       {!user && !loading && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 bg-black/70 backdrop-blur-xl" 
           style={{ backgroundImage: "radial-gradient(circle at center, rgba(230,43,30,0.2) 0%, transparent 80%)" }}>
-           <div className="max-w-md w-full p-10 rounded-[3rem] bg-bg-2 border border-accent/20 text-center shadow-2xl space-y-8 animate-in fade-in zoom-in duration-300">
-              <div className="w-24 h-24 rounded-[2rem] bg-accent flex items-center justify-center mx-auto mb-4 shadow-2xl shadow-accent/40">
+           <div className="max-w-md w-full p-10 rounded-[3rem] bg-white border-4 border-border text-center shadow-pop-lg space-y-8 animate-in fade-in zoom-in duration-300">
+              <div className="w-24 h-24 rounded-[2rem] bg-accent border-4 border-border flex items-center justify-center mx-auto mb-4 shadow-pop -rotate-6">
                  <Lock size={40} className="text-white" />
               </div>
               <div className="space-y-3">
-                <h2 className="text-4xl font-black tracking-tight">{t.login || 'Unlocked Growth'}</h2>
-                <p className="text-sm opacity-60 leading-relaxed font-medium">Create a free account to unlock AI analysis, vocabulary building, and shadowing practice.</p>
+                <h2 className="text-4xl font-black tracking-tight text-foreground uppercase">{t.login || 'Unlocked Growth'}</h2>
+                <p className="text-sm text-muted-foreground leading-relaxed font-bold">Create a free account to unlock AI analysis, vocabulary building, and shadowing practice.</p>
               </div>
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3 pt-4">
                 <button 
                   onClick={() => setShowAuth(true)}
-                  className="w-full py-4.5 rounded-2xl bg-accent text-white font-black hover:scale-[1.02] active:scale-[0.98] shadow-2xl shadow-accent/30 transition-all text-sm">
+                  className="btn-candy bg-accent text-white py-4.5 text-sm uppercase">
                   Register & Get 100 Free Credits
                 </button>
                 <button 
                   onClick={() => setShowAuth(true)}
-                  className="w-full py-4 rounded-2xl bg-white/5 text-[10px] font-bold opacity-30 hover:opacity-100 transition-opacity">
+                  className="w-full py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors">
                   Already have an account? Sign In
                 </button>
               </div>
@@ -1040,13 +977,339 @@ function WatchContent() {
       )}
 
       {/* ── Main layout ────────────────────────────────────────── */}
-      <main className="flex-1 flex flex-col md:flex-row overflow-hidden print-hidden">
+      <main className="flex-1 flex flex-col lg:flex-row gap-6 p-4 sm:p-8 relative z-10 overflow-hidden print-hidden">
 
-        {/* Notebook overlay — full-height right drawer with backdrop */}
-        {showVocab && (
-          <div className="absolute inset-0 z-50 flex justify-end">
-            <div className="absolute inset-0 bg-black/30" onClick={() => setShowVocab(false)} />
-          <div className="relative w-[420px] max-w-[90vw] h-full flex flex-col p-3" style={{ background: "var(--bg)", borderLeft: "1px solid var(--border)" }}>
+        {/* ── Video player ─────────────────────────────────────── */}
+        <section className="flex-[3] flex flex-col gap-4 min-w-0">
+          <div className="card-sticker bg-black p-0 overflow-hidden shadow-pop-lg animate-in fade-in slide-in-from-left-8 duration-500">
+            {/* Video */}
+            <div className="aspect-video relative flex items-center justify-center bg-black">
+              <video
+                ref={videoRef}
+                className="w-full h-full object-contain"
+                onLoadedMetadata={() => setDuration((videoRef.current?.duration ?? 0) * 1000)}
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
+                onClick={togglePlay}
+              />
+              {/* Subtitle overlay */}
+              {hasInteracted && activeItem && (
+                <div className="absolute bottom-12 left-0 right-0 px-8 text-center pointer-events-none transition-all duration-300">
+                  <p className="font-black leading-snug drop-shadow-[0_4px_12px_rgba(0,0,0,1)] px-4 py-2"
+                    style={{ fontSize: mainFontSize, color: mainColor }}>{activeItem.english}</p>
+                  {activeItem.translated && (
+                    <p className="mt-2 font-bold drop-shadow-[0_4px_8px_rgba(0,0,0,1)] bg-black/40 backdrop-blur-sm inline-block rounded-lg px-4 py-1"
+                      style={{ fontSize: subFontSize, color: subColor }}>{activeItem.translated}</p>
+                  )}
+                </div>
+              )}
+              {/* Start overlay */}
+              {!hasInteracted && (
+                <div onClick={togglePlay} className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-6 cursor-pointer bg-black/60 backdrop-blur-md">
+                  <button className="btn-candy w-24 h-24 rounded-full flex items-center justify-center bg-accent shadow-pop hover:scale-110 active:scale-90 transition-all">
+                    <Play size={40} fill="white" color="white" className="ml-2" />
+                  </button>
+                  <div className="text-center space-y-2">
+                    <p className="text-lg font-black text-white px-8">{data?.title}</p>
+                    <p className="text-sm font-bold text-white/50 uppercase tracking-widest">{t.loadingTalk}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Controls */}
+            <div className="px-6 py-4 bg-white border-t-2 border-border flex flex-col gap-4">
+              {/* Progress bar */}
+              <div className="relative h-4 flex items-center group/seek cursor-pointer">
+                <div className="w-full h-2 bg-muted border-2 border-border rounded-full overflow-hidden">
+                  <div className="h-full bg-accent transition-all duration-150 relative" style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}>
+                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-border rounded-full shadow-pop hidden group-hover/seek:block" />
+                  </div>
+                </div>
+                <input type="range" min={0} max={duration || 100} value={currentTime}
+                  onChange={e => { const v = Number(e.target.value); if (videoRef.current) videoRef.current.currentTime = (v - subtitleOffset) / 1000; setCurrentTime(v); }}
+                  className="absolute inset-0 w-full opacity-0 cursor-pointer h-full z-10" />
+              </div>
+
+              {/* Buttons row */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <button onClick={togglePlay} className="btn-candy p-2.5 rounded-xl text-foreground">
+                    {isPlaying ? <Pause size={20} strokeWidth={3} /> : <Play size={20} strokeWidth={3} fill="currentColor" />}
+                  </button>
+                  
+                  {/* Volume */}
+                  <div className="hidden sm:flex items-center gap-2 group/vol px-3 py-1 bg-muted/30 border-2 border-border rounded-xl">
+                     <button onClick={() => { const nv = volume > 0 ? 0 : 1; setVolume(nv); if (videoRef.current) videoRef.current.volume = nv; }} 
+                       className="text-foreground/70 hover:text-accent transition-colors">
+                       {volume === 0 ? <Volume size={18} /> : volume < 0.5 ? <Volume1 size={18} /> : <Volume2 size={18} />}
+                     </button>
+                     <input type="range" min="0" max="1" step="0.01" value={volume} 
+                       onChange={e => { const v = parseFloat(e.target.value); setVolume(v); if (videoRef.current) videoRef.current.volume = v; }}
+                       className="w-16 h-1 cursor-pointer accent-accent" />
+                  </div>
+
+                  <div className="px-3 py-1.5 bg-background border-2 border-border rounded-xl font-mono text-xs font-black text-muted-foreground">
+                    {formatTime(currentTime)} <span className="mx-1 text-border">/</span> {formatTime(duration)}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button onClick={() => videoRef.current?.requestPictureInPicture()} className="w-10 h-10 flex items-center justify-center rounded-xl bg-white border-2 border-border shadow-pop hover:scale-105 active:scale-95 transition-all text-foreground" title={t.pip}>
+                    <PictureInPicture size={18} strokeWidth={2.5} />
+                  </button>
+                  <button onClick={() => videoRef.current?.requestFullscreen()} className="w-10 h-10 flex items-center justify-center rounded-xl bg-white border-2 border-border shadow-pop hover:scale-105 active:scale-95 transition-all text-foreground" title={t.fullscreen}>
+                    <Maximize size={18} strokeWidth={2.5} />
+                  </button>
+                  
+                  <div className="w-px h-6 bg-border/20 mx-1" />
+                  
+                  <button onClick={() => setShowSettings(!showSettings)} className="btn-candy px-4 h-10">
+                    <Settings size={18} strokeWidth={2.5} className="mr-2" />
+                    <span className="text-xs font-black uppercase tracking-widest">{t.settings}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Settings Overlay (Portal-like relative positioning) */}
+          {showSettings && (
+            <div className="card-sticker bg-white p-6 shadow-pop-lg animate-in zoom-in-95 duration-200">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="font-black uppercase tracking-widest text-lg text-foreground flex items-center gap-2">
+                   <Sliders size={20} className="text-secondary" /> {t.settings}
+                </h3>
+                <button onClick={() => setShowSettings(false)} className="text-muted-foreground hover:text-foreground">
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-6">
+                  <div className="space-y-4">
+                    <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">{t.typographyLabel || 'Typography'}</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      {[{ label: t.mainSize, value: mainFontSize, set: setMainFontSize, min: 14, max: 36 },
+                        { label: t.subSize, value: subFontSize, set: setSubFontSize, min: 10, max: 26 }].map(s => (
+                        <div key={s.label} className="space-y-2">
+                          <div className="flex justify-between text-[11px] font-black uppercase tracking-wider text-muted-foreground">
+                            <span>{s.label}</span><span>{s.value}px</span>
+                          </div>
+                          <input type="range" min={s.min} max={s.max} value={s.value} onChange={e => s.set(Number(e.target.value))} 
+                            className="w-full h-1.5 bg-muted rounded-full accent-accent cursor-pointer" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center text-xs font-black uppercase tracking-widest text-muted-foreground">
+                      <span>{t.syncOffset}</span>
+                      <span className="text-accent">{(subtitleOffset / 1000).toFixed(1)}s</span>
+                    </div>
+                    <input type="range" min={-5000} max={5000} step={100} value={subtitleOffset} onChange={e => setSubtitleOffset(Number(e.target.value))} 
+                      className="w-full h-1.5 bg-muted rounded-full accent-secondary cursor-pointer" />
+                    <div className="flex justify-between text-[10px] font-bold text-muted-foreground/50">
+                      <span>-5.0s</span><span>0.0s</span><span>+5.0s</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="space-y-4">
+                    <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">{t.subtitleLangLabel}</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {SUBTITLE_LANGS.map(l => (
+                        <button key={l.value}
+                          onClick={() => handleSubtitleLangChange(l.value)}
+                          className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border-2
+                            ${subtitleLang === l.value ? "bg-tertiary border-border shadow-pop text-foreground" : "bg-white border-muted text-muted-foreground hover:border-border"}`}>
+                          {l.short}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">{t.playbackRate || 'Speed'}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {SPEEDS.map(r => (
+                        <button key={r} onClick={() => { if (videoRef.current) videoRef.current.playbackRate = r; setPlaybackRate(r); }}
+                          className={`w-12 h-10 flex items-center justify-center rounded-xl font-black text-xs border-2 transition-all
+                            ${playbackRate === r ? "bg-quaternary border-border shadow-pop translate-y-[-2px]" : "bg-white border-muted text-muted-foreground hover:border-border"}`}>
+                          {r}×
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* ── Transcript panel ──────────────────────────────────── */}
+        <section className="flex-[2] flex flex-col gap-4 min-w-0 h-full">
+          <div className="card-sticker bg-white flex flex-col p-0 overflow-hidden shadow-pop-lg h-full animate-in fade-in slide-in-from-right-8 duration-500 delay-100">
+            <div className="px-6 py-4 border-b-2 border-border flex items-center justify-between bg-white sticky top-0 z-20">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-secondary border-2 border-border rounded-xl shadow-pop flex items-center justify-center">
+                   <FileText size={20} className="text-foreground" strokeWidth={3} />
+                </div>
+                <div>
+                   <h2 className="text-sm font-black uppercase tracking-widest text-foreground">{t.transcript}</h2>
+                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tighter">{data?.transcript?.length ?? 0} {t.sentences || 'Sentences'}</p>
+                </div>
+              </div>
+
+              {data?.needsTranscription && (
+                <button onClick={handleTranscribe} disabled={isTranscribing}
+                  className="btn-candy text-[10px] px-3 py-2 bg-secondary/10 text-secondary border-secondary/20 shadow-none hover:bg-secondary hover:text-white">
+                  {isTranscribing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                  <span className="ml-1.5 uppercase font-black">{isTranscribing ? (transcribeStatus || t.aiTranscribing) : t.aiTranscribe}</span>
+                </button>
+              )}
+            </div>
+
+            <div ref={transcriptScrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-background/50">
+              <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}>
+                {rowVirtualizer.getVirtualItems().map(vRow => {
+                  const idx = vRow.index;
+                  const item = data!.transcript[idx];
+                  const isActive = activeIndex === idx;
+                  return (
+                    <div key={item.id}
+                      data-index={idx}
+                      ref={rowVirtualizer.measureElement}
+                      className="absolute left-0 w-full px-2"
+                      style={{ transform: `translateY(${vRow.start}px)` }}>
+                      <div
+                        onClick={() => { if (!hasInteracted) setHasInteracted(true); if (videoRef.current) { videoRef.current.currentTime = (item.startTime - subtitleOffset) / 1000; videoRef.current.play(); } }}
+                        className={`group/item p-4 rounded-2xl border-2 transition-all cursor-pointer relative
+                          ${isActive 
+                            ? "bg-white border-border shadow-pop-lg translate-x-1" 
+                            : "bg-white/40 border-transparent hover:bg-white hover:border-muted hover:shadow-pop"}`}>
+                        
+                        {/* Status Dots */}
+                        <div className="absolute left-0 top-1/2 -translate-x-3 -translate-y-1/2 flex flex-col gap-1">
+                          {isActive && <div className="w-2 h-6 bg-accent rounded-full border border-border animate-bounce" />}
+                          {notes[item.id] && <div className="w-2 h-2 bg-secondary rounded-full border border-border" />}
+                        </div>
+
+                        <div className="flex gap-4 items-start">
+                          <span className="text-[10px] font-black font-mono w-6 shrink-0 text-center opacity-30 mt-1">{idx + 1}</span>
+                          <div className="flex-1 space-y-2">
+                            <p className="font-bold leading-relaxed selection:bg-accent selection:text-white" style={{ fontSize: mainFontSize - 2 }}>
+                              {item.english.split(" ").map((w, i) => (
+                                <span key={i} onClick={async e => {
+                                  e.stopPropagation();
+                                  const clean = w.replace(/[^a-zA-Z'-]/g, "");
+                                  if (!clean) return;
+                                  videoRef.current?.pause(); setIsPlaying(false);
+                                  wordAbortRef.current?.abort();
+                                  wordAbortRef.current = new AbortController();
+                                  setWordLoading(true);
+                                  setActiveWord({ word: clean, loading: true } as VocabItem & { loading: boolean });
+                                  try {
+                                    const r = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "define", text: clean, context: item.english }), signal: wordAbortRef.current.signal });
+                                    const result = await r.json();
+                                    if (!r.ok) throw new Error(result.error);
+                                    setActiveWord(result);
+                                  } catch (err: any) { if (err.name !== "AbortError") setActiveWord(null); }
+                                  finally { setWordLoading(false); }
+                                }}
+                                  className="inline-block cursor-pointer px-1 rounded hover:bg-tertiary hover:scale-110 active:scale-95 transition-all">
+                                  {w}
+                                </span>
+                              ))}
+                            </p>
+                            {item.translated && (
+                              <p className="font-bold text-muted-foreground leading-relaxed" style={{ fontSize: subFontSize - 1 }}>{item.translated}</p>
+                            )}
+
+                            {/* Actions bar (Visible on hover or if active) */}
+                            <div className="flex items-center gap-2 pt-2 transition-all group-hover/item:opacity-100 opacity-0 group-focus:opacity-100">
+                               <button onClick={e => { e.stopPropagation(); if (analysisPanelId === item.id) setAnalysisPanelId(null); else handleDeepAnalyze(item); }}
+                                 className={`btn-candy text-[10px] px-3 py-1.5 shadow-none hover:shadow-pop hover:scale-105 active:scale-95
+                                   ${analysisData[item.id] ? "bg-tertiary border-border text-foreground" : "bg-white border-muted text-muted-foreground"}`}>
+                                 {analysisLoading === item.id ? <Loader2 size={12} className="animate-spin text-accent" /> : <Sparkles size={12} className="text-accent" />}
+                                 <span className="ml-1 uppercase font-black">{t.analyzeBtn}</span>
+                               </button>
+                               <button onClick={e => { e.stopPropagation(); if (recordingId === item.id) stopRecording(); else startRecording(item.id); }}
+                                 className="btn-candy text-[10px] px-3 py-1.5 bg-white border-muted text-muted-foreground shadow-none hover:bg-secondary hover:text-white hover:border-secondary hover:shadow-pop hover:scale-105 active:scale-95">
+                                 <Mic size={12} />
+                                 <span className="ml-1 uppercase font-black">{recordingId === item.id ? t.recording : t.recordBtn}</span>
+                               </button>
+                               <button onClick={e => { e.stopPropagation(); setEditingNoteId(editingNoteId === item.id ? null : item.id); setNoteInput(notes[item.id] || ""); }}
+                                 className={`btn-candy text-[10px] px-3 py-1.5 shadow-none hover:shadow-pop hover:scale-105 active:scale-95
+                                   ${notes[item.id] ? "bg-quaternary border-border text-foreground" : "bg-white border-muted text-muted-foreground"}`}>
+                                 <FileText size={12} className="text-secondary" />
+                                 <span className="ml-1 uppercase font-black">{notes[item.id] ? t.note : t.addNote}</span>
+                               </button>
+                            </div>
+
+                            {/* Note Editor */}
+                            {editingNoteId === item.id && (
+                              <div className="mt-4 p-4 rounded-2xl bg-muted border-2 border-border shadow-pop animate-in slide-in-from-top-2 duration-300" onClick={e => e.stopPropagation()}>
+                                <textarea autoFocus value={noteInput} onChange={e => setNoteInput(e.target.value)} placeholder={t.notePlaceholder}
+                                  className="w-full bg-white border-2 border-border rounded-xl p-3 text-sm font-bold focus:ring-4 focus:ring-accent/10 transition-all outline-none resize-none min-h-[80px]" />
+                                <div className="flex justify-end gap-2 mt-3">
+                                   <button onClick={() => setEditingNoteId(null)} className="px-3 py-2 text-xs font-black uppercase text-muted-foreground hover:text-foreground">{t.close}</button>
+                                   <button onClick={() => handleSaveNote(item.id)} className="btn-candy bg-accent text-white px-4 py-2 text-xs font-black uppercase">{t.saveNote}</button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Note Display */}
+                            {notes[item.id] && editingNoteId !== item.id && (
+                              <div className="mt-2 p-3 rounded-xl bg-quaternary/30 border-2 border-border/20 border-dashed">
+                                 <p className="text-[11px] font-bold italic text-foreground/70">{notes[item.id]}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── AI Analysis panel (Drawer-like overlay) ───────────────────── */}
+        {analysisPanelId !== null && analysisData[analysisPanelId] && (
+          <div className="fixed inset-y-0 right-0 w-[500px] max-w-full z-[120] animate-in slide-in-from-right duration-500 shadow-pop-lg">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setAnalysisPanelId(null)} />
+            <div className="relative h-full bg-white border-l-4 border-border flex flex-col">
+              <AIAnalysisPanel
+                analysis={analysisData[analysisPanelId]}
+                sentence={data?.transcript.find(i => i.id === analysisPanelId)}
+                savedSentences={savedSentences}
+                onClose={() => setAnalysisPanelId(null)}
+                onSave={saveSentence}
+              />
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* ── Word modal ─────────────────────────────────────────── */}
+      {activeWord && (
+        <WordLookupModal
+          activeWord={activeWord}
+          wordLoading={wordLoading}
+          onClose={() => setActiveWord(null)}
+          onSave={saveToVocab}
+        />
+      )}
+
+      {/* ── Notebook overlay (Right drawer) ──────────────────────── */}
+      {showVocab && (
+        <div className="fixed inset-0 z-[110] flex justify-end">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowVocab(false)} />
+          <div className="relative w-[480px] max-w-[90vw] h-full flex flex-col bg-background border-l-4 border-border shadow-pop-lg animate-in slide-in-from-right duration-500">
             <LearningNotebook 
               words={vocabWords}
               sentences={savedSentences}
@@ -1064,11 +1327,10 @@ function WatchContent() {
               onSelectWord={word => { videoRef.current?.pause(); setIsPlaying(false); setActiveWord(word); }}
               onSelectSentence={sent => {
                 if (videoRef.current) {
-                  if (typeof sent.id === "number") {
-                    const item = data?.transcript.find(t => t.id === sent.id);
-                    if (item) { videoRef.current.currentTime = (item.startTime - subtitleOffset) / 1000; videoRef.current.play(); setIsPlaying(true); }
-                  }
-                  handleDeepAnalyze({ id: sent.id as number, english: sent.english, translated: sent.translated, startTime: 0 }, sent.analysis);
+                  const targetId = typeof sent.id === "string" ? parseInt(sent.id) : sent.id;
+                  const item = data?.transcript.find(t => t.id === targetId);
+                  if (item) { videoRef.current.currentTime = (item.startTime - subtitleOffset) / 1000; videoRef.current.play(); setIsPlaying(true); }
+                  handleDeepAnalyze({ id: targetId, english: sent.english, translated: sent.translated, startTime: 0 }, sent.analysis);
                 }
               }}
               onSelectNote={id => {
@@ -1077,392 +1339,8 @@ function WatchContent() {
               }}
             />
           </div>
-          </div>
-        )}
-
-        {/* ── Video player ─────────────────────────────────────── */}
-        <section className="flex-[3] flex flex-col bg-black overflow-hidden">
-          {/* Video */}
-          <div className="flex-1 relative flex items-center justify-center overflow-hidden">
-            <video
-              ref={videoRef}
-              className="w-full h-full object-contain"
-              onLoadedMetadata={() => setDuration((videoRef.current?.duration ?? 0) * 1000)}
-              onPlay={() => setIsPlaying(true)}
-              onPause={() => setIsPlaying(false)}
-              onClick={togglePlay}
-            />
-            {/* Subtitle overlay */}
-            {hasInteracted && activeItem && (
-              <div className="absolute bottom-6 left-0 right-0 px-8 text-center pointer-events-none">
-                <p className="font-bold leading-snug drop-shadow-[0_2px_12px_rgba(0,0,0,1)]"
-                  style={{ fontSize: mainFontSize, color: mainColor }}>{activeItem.english}</p>
-                {activeItem.translated && (
-                  <p className="mt-1 font-medium drop-shadow-[0_2px_8px_rgba(0,0,0,1)]"
-                    style={{ fontSize: subFontSize, color: subColor }}>{activeItem.translated}</p>
-                )}
-              </div>
-            )}
-            {/* Start overlay */}
-            {!hasInteracted && (
-              <div onClick={togglePlay} className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 cursor-pointer" style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }}>
-                <div className="w-20 h-20 rounded-full flex items-center justify-center" style={{ background: "var(--accent)", boxShadow: "0 0 40px rgba(230,43,30,0.5)" }}>
-                  <Play size={32} fill="white" color="white" className="ml-1" />
-                </div>
-                <p className="text-sm font-medium text-white/60">{data?.title}</p>
-              </div>
-            )}
-          </div>
-
-          {/* Controls */}
-          <div className="shrink-0 px-4 pb-4 pt-3 relative z-30" style={{ background: "rgba(0,0,0,0.85)" }}>
-            {/* Progress bar */}
-            <div className="relative h-6 flex items-center mb-2 group/seek cursor-pointer"
-              onMouseMove={e => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                const el = e.currentTarget.querySelector<HTMLElement>("[data-tooltip]");
-                if (el && duration > 0) {
-                  el.style.left = `${pct * 100}%`;
-                  el.textContent = formatTime(pct * duration);
-                }
-              }}
-            >
-              <div className="absolute inset-y-0 left-0 right-0 flex items-center">
-                <div className="w-full h-1 group-hover/seek:h-2 rounded-full transition-all duration-150" style={{ background: "rgba(255,255,255,0.15)" }}>
-                  <div className="h-full rounded-full" style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%`, background: "var(--accent)" }} />
-                </div>
-              </div>
-              {/* Hover time tooltip */}
-              <div data-tooltip className="absolute -top-7 -translate-x-1/2 px-1.5 py-0.5 rounded text-xs font-mono pointer-events-none opacity-0 group-hover/seek:opacity-100 transition-opacity"
-                style={{ background: "rgba(0,0,0,0.8)", color: "#fff", whiteSpace: "nowrap" }}>
-                {formatTime(currentTime)}
-              </div>
-              <input type="range" min={0} max={duration || 100} value={currentTime}
-                onChange={e => { const v = Number(e.target.value); if (videoRef.current) videoRef.current.currentTime = (v - subtitleOffset) / 1000; setCurrentTime(v); }}
-                className="absolute inset-0 w-full opacity-0 cursor-pointer h-full" />
-            </div>
-            {/* Buttons row */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <button onClick={togglePlay} className="text-white">
-                  {isPlaying ? <Pause size={22} fill="white" /> : <Play size={22} fill="white" />}
-                </button>
-                {/* Volume Control */}
-                <div className="flex items-center group/vol gap-2">
-                   <button onClick={() => { const nv = volume > 0 ? 0 : 1; setVolume(nv); if (videoRef.current) videoRef.current.volume = nv; }} 
-                     className="p-1 rounded hover:bg-white/10 transition-colors text-white/70 hover:text-white">
-                     {volume === 0 ? <Volume size={18} /> : volume < 0.5 ? <Volume1 size={18} /> : <Volume2 size={18} />}
-                   </button>
-                   <input type="range" min="0" max="1" step="0.01" value={volume} 
-                     onChange={e => { const v = parseFloat(e.target.value); setVolume(v); if (videoRef.current) videoRef.current.volume = v; }}
-                     className="w-0 group-hover/vol:w-20 transition-all overflow-hidden h-1 cursor-pointer accent-white" />
-                </div>
-                <span className="text-xs font-mono" style={{ color: "rgba(255,255,255,0.5)" }}>
-                  {formatTime(currentTime)} / {formatTime(duration)}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                {/* Speed */}
-                <div className="relative">
-                  <button onClick={() => { if (!hasInteracted) setHasInteracted(true); setShowSpeedMenu(v => !v); setShowSettings(false); }}
-                    className="px-3 py-1 rounded text-xs font-bold border transition-all"
-                    style={{ color: showSpeedMenu ? "var(--accent)" : "rgba(255,255,255,0.6)", borderColor: showSpeedMenu ? "var(--accent)" : "rgba(255,255,255,0.2)" }}>
-                    {playbackRate}×
-                  </button>
-                  {showSpeedMenu && (
-                    <div className="absolute bottom-full mb-2 right-0 rounded-xl overflow-hidden shadow-2xl z-50 w-24"
-                      style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}>
-                      {SPEEDS.map(r => (
-                        <button key={r} onClick={() => { if (videoRef.current) videoRef.current.playbackRate = r; setPlaybackRate(r); setShowSpeedMenu(false); }}
-                          className="block w-full px-5 py-2 text-sm text-left transition-colors"
-                          style={{ color: r === playbackRate ? "var(--accent)" : "var(--text)", background: r === playbackRate ? "var(--accent-s)" : "transparent" }}
-                          onMouseEnter={e => { if (r !== playbackRate) e.currentTarget.style.background = "var(--bg-3)"; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = r === playbackRate ? "var(--accent-s)" : "transparent"; }}>
-                          {r}×
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {/* Fullscreen & PiP */}
-                <button onClick={() => videoRef.current?.requestPictureInPicture()} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-white/50 hover:text-white" title={t.pip}>
-                  <PictureInPicture size={18} />
-                </button>
-                <button onClick={() => videoRef.current?.requestFullscreen()} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-white/50 hover:text-white" title={t.fullscreen}>
-                  <Maximize size={18} />
-                </button>
-                {/* Settings */}
-                <div className="relative">
-                  <button onClick={() => { if (!hasInteracted) setHasInteracted(true); setShowSettings(v => !v); setShowSpeedMenu(false); }}
-                    className="p-1.5 rounded transition-colors"
-                    style={{ color: showSettings ? "var(--accent)" : "rgba(255,255,255,0.6)" }}>
-                    <Settings size={18} />
-                  </button>
-                  {showSettings && (
-                    <div className="absolute bottom-full mb-3 right-0 rounded-xl p-5 shadow-2xl w-72 space-y-5 z-50"
-                      style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}
-                      onClick={e => e.stopPropagation()}>
-                      <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--accent)" }}><Sliders size={12} className="inline mr-1" />{t.settings}</p>
-                      <div className="grid grid-cols-2 gap-4">
-                        {[{ label: t.mainSize, value: mainFontSize, set: setMainFontSize, min: 14, max: 36 },
-                          { label: t.subSize, value: subFontSize, set: setSubFontSize, min: 10, max: 26 }].map(s => (
-                          <div key={s.label} className="space-y-1.5">
-                            <div className="flex justify-between text-xs" style={{ color: "var(--text-2)" }}>
-                              <span>{s.label}</span><span>{s.value}px</span>
-                            </div>
-                            <input type="range" min={s.min} max={s.max} value={s.value} onChange={e => s.set(Number(e.target.value))} className="w-full" />
-                          </div>
-                        ))}
-                      </div>
-                      <div className="space-y-1.5">
-                        <div className="flex justify-between text-xs" style={{ color: "var(--text-2)" }}>
-                          <span><FastForward size={11} className="inline mr-1" />{t.syncOffset}</span>
-                          <span>{subtitleOffset > 0 ? "+" : ""}{(subtitleOffset / 1000).toFixed(1)}s</span>
-                        </div>
-                        <input type="range" min={-5000} max={5000} step={100} value={subtitleOffset} onChange={e => setSubtitleOffset(Number(e.target.value))} className="w-full" />
-                      </div>
-
-                      {/* Subtitle Language */}
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-xs" style={{ color: "var(--text-2)" }}>
-                          <span className="font-medium">{t.subtitleLangLabel}</span>
-                          {isLoadingSubtitles && <Loader2 size={10} className="animate-spin" style={{ color: "var(--accent)" }} />}
-                        </div>
-                        <div className="grid grid-cols-3 gap-1">
-                          {SUBTITLE_LANGS.map(l => (
-                            <button key={l.value}
-                              onClick={() => handleSubtitleLangChange(l.value)}
-                              disabled={isLoadingSubtitles}
-                              className="px-2 py-1 rounded text-[11px] font-medium transition-all"
-                              style={{
-                                background: subtitleLang === l.value ? "var(--accent-s)" : "var(--bg-3)",
-                                color: subtitleLang === l.value ? "var(--accent)" : "var(--text-2)",
-                                border: `1px solid ${subtitleLang === l.value ? "var(--accent)" : "var(--border)"}`,
-                                opacity: isLoadingSubtitles ? 0.5 : 1,
-                              }}>
-                              {l.short}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Color Settings */}
-                      <div className="grid grid-cols-2 gap-4">
-                         <div>
-                            <p className="text-[10px] uppercase font-bold text-white/40 mb-2">{t.mainColor}</p>
-                            <div className="flex gap-2">
-                               {["#ffffff", "#ffd700", "#00ff00", "#00d4ff"].map(c => (
-                                 <button key={c} onClick={() => setMainColor(c)} className="w-5 h-5 rounded-full border border-white/10 transition-transform active:scale-95" 
-                                   style={{ background: c, outline: mainColor === c ? "2px solid var(--accent)" : "none", outlineOffset: "1px" }} />
-                               ))}
-                            </div>
-                         </div>
-                         <div>
-                            <p className="text-[10px] uppercase font-bold text-white/40 mb-2">{t.subColor}</p>
-                            <div className="flex gap-2">
-                               {["rgba(255,255,255,0.75)", "rgba(255,215,0,0.7)", "rgba(0,255,0,0.7)", "#cccccc"].map(c => (
-                                 <button key={c} onClick={() => setSubColor(c)} className="w-5 h-5 rounded-full border border-white/10 transition-transform active:scale-95" 
-                                   style={{ background: c, outline: subColor === c ? "2px solid var(--accent)" : "none", outlineOffset: "1px" }} />
-                               ))}
-                            </div>
-                         </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ── Transcript panel ──────────────────────────────────── */}
-        <section className="flex-[2] flex flex-col overflow-hidden border-l" style={{ borderColor: "var(--border)", background: "var(--bg)" }}>
-          <div className="px-4 py-3 border-b shrink-0 flex items-center gap-2" style={{ borderColor: "var(--border)", background: "var(--bg-2)" }}>
-            <div className="w-1 h-4 rounded-full" style={{ background: "var(--accent)" }} />
-            <span className="text-sm font-bold">{t.transcript}</span>
-            {data?.needsTranscription && !isTranscribing && (
-              <button 
-                onClick={handleTranscribe}
-                className="ml-3 text-[10px] px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 transition-all font-bold flex items-center gap-1 border border-indigo-500/20"
-              >
-                <Sparkles size={10} /> {t.aiTranscribe}
-              </button>
-            )}
-            {isTranscribing && (
-              <div className="ml-3 flex items-center gap-2 px-2 py-0.5 rounded-lg bg-indigo-500/5 border border-indigo-500/10">
-                <Loader2 size={10} className="animate-spin text-indigo-500" />
-                <span className="text-[10px] font-bold text-indigo-500 animate-pulse">{transcribeStatus || t.aiTranscribing}</span>
-              </div>
-            )}
-
-            {/* AI Translate (if official sub is missing) */}
-            {data?.isTranslationMissing && subtitleLang !== "en" && (
-              <div className="ml-auto flex items-center gap-2">
-                <span className="hidden xl:inline text-[10px] whitespace-nowrap" style={{ color: "var(--text-3)" }}>
-                  {lang === "en" ? "No official sub" : "暂无官方字幕"}
-                </span>
-                {user ? (
-                  <button onClick={handleAiTranslate} disabled={isAiTranslating}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all border shrink-0"
-                    style={{
-                      background: isAiTranslating ? "var(--bg-3)" : "var(--accent-s)",
-                      color: isAiTranslating ? "var(--text-3)" : "var(--accent)",
-                      borderColor: "var(--accent)",
-                      opacity: isAiTranslating ? 0.7 : 1,
-                    }}>
-                    {isAiTranslating
-                      ? <><Loader2 size={10} className="animate-spin" /> {t.aiTranslating}</>
-                      : <><Sparkles size={10} /> {t.aiTranslate} · {AI_TRANSLATE_COST}</>}
-                  </button>
-                ) : (
-                  <span className="text-[10px]" style={{ color: "var(--text-3)" }}>{t.login}</span>
-                )}
-              </div>
-            )}
-            
-            {!data?.isTranslationMissing && <span className="ml-auto text-xs" style={{ color: "var(--text-3)" }}>{data?.transcript?.length ?? 0}</span>}
-          </div>
-          <div ref={transcriptScrollRef} className="flex-1 overflow-y-auto custom-scrollbar p-3">
-            <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}>
-            {rowVirtualizer.getVirtualItems().map(vRow => {
-              const idx = vRow.index;
-              const item = data!.transcript[idx];
-              const isActive = activeIndex === idx;
-              return (
-                <div key={item.id}
-                  data-index={idx}
-                  ref={rowVirtualizer.measureElement}
-                  style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vRow.start}px)`, paddingBottom: "4px" }}>
-                <div
-                  onClick={() => { if (!hasInteracted) setHasInteracted(true); if (videoRef.current) { videoRef.current.currentTime = (item.startTime - subtitleOffset) / 1000; videoRef.current.play(); } }}
-                  className="rounded-xl p-3 cursor-pointer transition-all group/item"
-                  style={{
-                    background: isActive ? "var(--bg-2)" : "transparent",
-                    border: `1px solid ${isActive ? "var(--border)" : "transparent"}`,
-                    opacity: isActive ? 1 : 0.55,
-                  }}
-                  onMouseEnter={e => { if (!isActive) { e.currentTarget.style.opacity = "1"; e.currentTarget.style.background = "var(--bg-3)"; } }}
-                  onMouseLeave={e => { if (!isActive) { e.currentTarget.style.opacity = "0.55"; e.currentTarget.style.background = "transparent"; } }}>
-                  {/* Sentence number + English */}
-                  <div className="flex gap-2 items-start">
-                    <span className="text-[10px] font-mono mt-0.5 w-6 shrink-0 text-right" style={{ color: "var(--text-3)" }}>{idx + 1}</span>
-                    <div className="flex-1">
-                      <p className="leading-relaxed font-medium" style={{ fontSize: mainFontSize - 2, color: isActive ? "var(--text)" : "inherit" }}>
-                        {item.english.split(" ").map((w, i) => (
-                          <span key={i} onClick={async e => {
-                            e.stopPropagation();
-                            const clean = w.replace(/[^a-zA-Z'-]/g, "");
-                            if (!clean) return;
-                            (async () => {
-                              videoRef.current?.pause(); setIsPlaying(false);
-                              // Cancel previous in-flight lookup
-                              wordAbortRef.current?.abort();
-                              wordAbortRef.current = new AbortController();
-                              setWordLoading(true);
-                              setActiveWord({ word: clean, loading: true } as VocabItem & { loading: boolean });
-                              try {
-                                const r = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "define", text: clean, context: item.english }), signal: wordAbortRef.current.signal });
-                                const result = await r.json();
-                                if (!r.ok) throw new Error(result.error);
-                                setActiveWord(result);
-                              } catch (err: any) { if (err.name !== "AbortError") setActiveWord(null); }
-                              finally { setWordLoading(false); }
-                            })();
-                          }}
-                            className="inline cursor-pointer rounded px-0.5 transition-colors"
-                            onMouseEnter={e => (e.currentTarget.style.background = "var(--accent-s)")}
-                            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                            {w}{" "}
-                          </span>
-                        ))}
-                      </p>
-                      {item.translated && (
-                        <p className="mt-0.5 leading-relaxed" style={{ fontSize: subFontSize - 1, color: "var(--text-2)" }}>{item.translated}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Action row */}
-                  <div className="flex items-center gap-2 mt-2 pl-8 opacity-0 group-hover/item:opacity-100 transition-opacity">
-                    <button onClick={e => { e.stopPropagation(); analysisPanelId === item.id ? setAnalysisPanelId(null) : handleDeepAnalyze(item); }}
-                      className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all"
-                      style={{ background: analysisPanelId === item.id ? "var(--accent)" : analysisData[item.id] ? "var(--accent-s)" : "var(--bg-3)", color: analysisPanelId === item.id ? "#fff" : analysisData[item.id] ? "var(--accent)" : "var(--text-2)" }}>
-                      {analysisLoading === item.id ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
-                      {t.analyzeBtn}
-                    </button>
-                    <button onClick={e => { e.stopPropagation(); recordingId === item.id ? stopRecording() : startRecording(item.id); }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                      style={{ background: recordingId === item.id ? "var(--accent)" : "var(--bg-3)", color: recordingId === item.id ? "#fff" : "var(--text-2)" }}>
-                      <Mic size={13} />
-                      {recordingId === item.id ? t.recording : t.recordBtn}
-                    </button>
-                    <button onClick={e => { e.stopPropagation(); setEditingNoteId(editingNoteId === item.id ? null : item.id); setNoteInput(notes[item.id] || ""); }}
-                      className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all"
-                      style={{ background: notes[item.id] ? "var(--accent-s)" : "var(--bg-3)", color: notes[item.id] ? "var(--accent)" : "var(--text-2)" }}>
-                      <FileText size={13} />
-                      {notes[item.id] ? t.note : t.addNote}
-                    </button>
-                    {audioUrls[item.id] && (
-                      <audio src={audioUrls[item.id]} controls className="h-6" style={{ maxWidth: "140px" }} />
-                    )}
-                  </div>
-
-                  {/* Note Editor */}
-                  {editingNoteId === item.id && (
-                    <div className="mt-2 ml-8 space-y-2 p-3 rounded-xl card" onClick={e => e.stopPropagation()}>
-                      <textarea
-                        autoFocus
-                        value={noteInput}
-                        onChange={e => setNoteInput(e.target.value)}
-                        placeholder={t.notePlaceholder}
-                        className="w-full bg-transparent border-none outline-none text-xs resize-none min-h-[60px]"
-                        style={{ color: "var(--text)" }}
-                      />
-                      <div className="flex justify-end gap-2">
-                         <button onClick={() => setEditingNoteId(null)} className="px-3 py-1 text-[10px] font-bold opacity-40">{t.close}</button>
-                         <button onClick={() => handleSaveNote(item.id)} className="px-3 py-1 rounded-lg text-[10px] font-bold text-white" style={{ background: "var(--accent)" }}>{t.saveNote}</button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Note Display (not editing) */}
-                  {notes[item.id] && editingNoteId !== item.id && (
-                    <div className="mt-2 ml-8 p-3 rounded-xl card opacity-80 border-l-2 bg-accent-s" style={{ borderLeftColor: "var(--accent)" }}>
-                       <p className="text-[11px] italic" style={{ color: "var(--text-2)" }}>{notes[item.id]}</p>
-                    </div>
-                  )}
-
-                  </div>
-                </div>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-
-        {/* ── AI Analysis panel (3rd column) ───────────────────── */}
-        {analysisPanelId !== null && analysisData[analysisPanelId] && (
-          <AIAnalysisPanel
-            analysis={analysisData[analysisPanelId]}
-            sentence={data?.transcript.find(i => i.id === analysisPanelId)}
-            savedSentences={savedSentences}
-            onClose={() => setAnalysisPanelId(null)}
-            onSave={saveSentence}
-          />
-        )}
-      </main>
-
-      {/* ── Word modal ─────────────────────────────────────────── */}
-      {activeWord && (
-        <WordLookupModal
-          activeWord={activeWord}
-          wordLoading={wordLoading}
-          onClose={() => setActiveWord(null)}
-          onSave={saveToVocab}
-        />
+        </div>
       )}
-
     </div>
   );
 }
@@ -1470,8 +1348,8 @@ function WatchContent() {
 export default function WatchPage() {
   return (
     <Suspense fallback={
-      <div className="h-screen w-full flex items-center justify-center" style={{ background: "var(--bg)" }}>
-        <div className="w-10 h-10 border-2 rounded-full animate-spin" style={{ borderColor: "var(--border)", borderTopColor: "var(--accent)" }} />
+      <div className="h-screen w-full flex items-center justify-center bg-background">
+        <div className="w-12 h-12 border-4 border-border border-t-accent rounded-full animate-spin shadow-pop" />
       </div>
     }>
       <WatchContent />

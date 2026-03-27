@@ -57,67 +57,73 @@ export default function AuthModal({ onClose, onSuccess }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-[2rem] p-8 shadow-2xl relative animate-in fade-in zoom-in duration-200"
-        style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-foreground/20 backdrop-blur-md" onClick={onClose}>
+      <div className="w-full max-w-sm bg-white border-2 border-border rounded-3xl p-8 shadow-pop-lg relative animate-in fade-in zoom-in duration-300 ease-out"
         onClick={e => e.stopPropagation()}>
 
-        <button onClick={onClose} className="absolute top-6 right-6 p-2 rounded-full hover:bg-white/5 transition-colors">
-          <X size={18} className="opacity-40" />
+        <button onClick={onClose} 
+          className="absolute -top-3 -right-3 w-10 h-10 bg-white border-2 border-border rounded-full flex items-center justify-center shadow-pop hover:scale-110 active:scale-95 transition-all z-10">
+          <X size={20} strokeWidth={2.5} />
         </button>
 
         <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 rounded-3xl bg-accent/10 flex items-center justify-center mb-4">
-            {isLogin ? <LogIn size={28} className="text-accent" /> : <UserPlus size={28} className="text-accent" />}
+          <div className="w-20 h-20 rounded-2xl bg-tertiary border-2 border-border shadow-pop flex items-center justify-center mb-4 -rotate-3 hover:rotate-0 transition-transform">
+            {isLogin ? 
+              <LogIn size={32} strokeWidth={2.5} className="text-foreground" /> : 
+              <UserPlus size={32} strokeWidth={2.5} className="text-foreground" />
+            }
           </div>
-          <h2 className="text-2xl font-black">{isLogin ? "Welcome Back" : "Join TEDMaster"}</h2>
-          <p className="text-xs opacity-40 mt-1">Unlock AI learning with credits</p>
+          <h2 className="text-3xl font-black text-foreground">{isLogin ? "Welcome Back!" : "Join the Fun!"}</h2>
+          <p className="text-sm font-medium text-muted-foreground mt-1">Unlock AI tools with credits</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <label className="text-[10px] uppercase font-bold text-accent ml-1 tracking-wider">Email</label>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-xs uppercase font-black text-foreground ml-1 tracking-widest">Email Address</label>
             <div className="relative group">
-              <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 opacity-30 group-focus-within:opacity-100 transition-opacity" />
+              <Mail size={18} strokeWidth={2.5} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-accent transition-colors" />
               <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
-                className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-bg-3 border border-transparent focus:border-accent/40 outline-none transition-all text-sm"
-                placeholder="name@example.com" />
+                className="w-full pl-12 pr-4 py-4 rounded-xl bg-white border-2 border-border focus:border-accent focus:shadow-pop outline-none transition-all text-sm font-medium"
+                placeholder="hello@example.com" />
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-[10px] uppercase font-bold text-accent ml-1 tracking-wider">Password</label>
+          <div className="space-y-2">
+            <label className="text-xs uppercase font-black text-foreground ml-1 tracking-widest">Secret Password</label>
             <div className="relative group">
-              <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 opacity-30 group-focus-within:opacity-100 transition-opacity" />
+              <Lock size={18} strokeWidth={2.5} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-accent transition-colors" />
               <input type="password" value={password} onChange={e => setPassword(e.target.value)} required
-                className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-bg-3 border border-transparent focus:border-accent/40 outline-none transition-all text-sm"
+                className="w-full pl-12 pr-4 py-4 rounded-xl bg-white border-2 border-border focus:border-accent focus:shadow-pop outline-none transition-all text-sm font-medium"
                 placeholder="••••••••" />
             </div>
           </div>
 
           {!isLogin && (
-            <div className="space-y-1.5">
-              <label className="text-[10px] uppercase font-bold text-accent ml-1 tracking-wider">Activation Code</label>
+            <div className="space-y-2">
+              <label className="text-xs uppercase font-black text-foreground ml-1 tracking-widest">Activation Code</label>
               <div className="relative group">
-                <KeyRound size={16} className="absolute left-4 top-1/2 -translate-y-1/2 opacity-30 group-focus-within:opacity-100 transition-opacity" />
+                <KeyRound size={18} strokeWidth={2.5} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-accent transition-colors" />
                 <input type="text" value={activationCode} onChange={e => setActivationCode(e.target.value.trim())} required
-                  className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-bg-3 border border-transparent focus:border-accent/40 outline-none transition-all text-sm font-mono tracking-wider"
-                  placeholder="XXXX-XXXX-XXXX" />
+                  className="w-full pl-12 pr-4 py-4 rounded-xl bg-white border-2 border-border focus:border-accent focus:shadow-pop outline-none transition-all text-sm font-mono font-bold tracking-wider"
+                  placeholder="CODE-123" />
               </div>
             </div>
           )}
 
-          {error && <div className="p-3 rounded-xl bg-accent/5 text-[11px] font-bold text-accent border border-accent/10 text-center">{error}</div>}
+          {error && (
+            <div className="p-4 rounded-xl bg-secondary/10 text-xs font-bold text-secondary border-2 border-secondary/20 text-center animate-bounce-short">
+              {error}
+            </div>
+          )}
 
-          <button type="submit" disabled={loading}
-            className="w-full py-4 rounded-2xl bg-accent text-white font-black text-sm shadow-xl shadow-accent/20 hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center justify-center gap-2">
-            {loading ? <Loader2 className="animate-spin" size={18} /> : (isLogin ? "Sign In" : "Sign Up")}
+          <button type="submit" disabled={loading} className="w-full btn-candy text-lg h-16">
+            {loading ? <Loader2 className="animate-spin" size={24} strokeWidth={2.5} /> : (isLogin ? "Login →" : "Sign Up Now!")}
           </button>
         </form>
 
-        <div className="mt-8 pt-6 border-t border-white/5 text-center">
-          <button onClick={switchMode} className="text-xs font-bold text-accent/60 hover:text-accent transition-colors">
-            {isLogin ? "Don't have an account? Sign up" : "Already have an account? Log in"}
+        <div className="mt-8 pt-6 border-t-2 border-muted text-center">
+          <button onClick={switchMode} className="text-xs font-black text-accent hover:text-secondary transition-colors uppercase tracking-wider">
+            {isLogin ? "New here? Create an account" : "Been here before? Log in"}
           </button>
         </div>
       </div>

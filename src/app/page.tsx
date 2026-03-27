@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Zap, Mic, BookOpen, Sun, Moon, ChevronDown, LogIn, User, LogOut, Clock, Play } from "lucide-react";
+import { Search, Zap, Mic, BookOpen, Sun, Moon, ChevronDown, LogIn, User, LogOut, Clock, Play, Sparkles } from "lucide-react";
 import AuthModal from "@/components/AuthModal";
 import { useApp, LANGS } from "@/lib/i18n";
 import type { FeaturedTalk } from "@/app/api/featured/route";
@@ -98,73 +98,47 @@ export default function Home() {
   const currentLang = LANGS.find(l => l.value === lang);
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
+    <div className="min-h-screen flex flex-col bg-background font-body selection:bg-tertiary selection:text-foreground overflow-x-hidden">
+      
+      {/* ── Background Decorations ────────────────────────────── */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-tertiary rounded-full mix-blend-multiply opacity-20 animate-pulse" />
+        <div className="absolute bottom-[-5%] left-[-5%] w-[30%] h-[30%] bg-secondary rounded-full mix-blend-multiply opacity-10" />
+        <div className="absolute top-[20%] left-[10%] w-12 h-12 bg-accent opacity-20 rounded-lg rotate-12" />
+        <div className="absolute bottom-[20%] right-[15%] w-16 h-16 bg-quaternary opacity-20 rounded-full border-2 border-border border-dashed" />
+        <div className="absolute inset-0 dot-grid opacity-[0.15]" />
+      </div>
 
       {/* ── Header ─────────────────────────────────────────────── */}
-      <header className="h-14 flex items-center justify-between px-6 border-b" style={{ borderColor: "var(--border)", background: "var(--bg-2)" }}>
-        <div className="flex items-center gap-2">
-          <span className="font-black text-lg tracking-tight">
-            TED<span style={{ color: "var(--accent)" }}>Master</span>
+      <header className="sticky top-4 mx-4 sm:mx-8 z-50 flex items-center justify-between px-6 py-3 bg-white border-2 border-border rounded-2xl shadow-pop">
+        <div className="flex items-center gap-3 group cursor-pointer">
+          <div className="w-10 h-10 bg-accent border-2 border-border rounded-xl shadow-pop flex items-center justify-center -rotate-6 group-hover:rotate-0 transition-transform">
+            <Zap className="text-white fill-white" size={20} strokeWidth={2.5} />
+          </div>
+          <span className="font-black text-2xl tracking-tight text-foreground">
+            TED<span className="text-accent underline decoration-tertiary decoration-4 underline-offset-4">Master</span>
           </span>
         </div>
-        <div className="flex items-center gap-1">
-          {/* GitHub */}
-          <a
-            href="https://github.com/TrojanFish/TedMater"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="p-2 rounded-lg transition-colors"
-            style={{ color: "var(--text-2)" }}
-            onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
-            onMouseLeave={e => (e.currentTarget.style.color = "var(--text-2)")}
-            title={t.github}
-          >
-            <GithubIcon />
-          </a>
 
-          {/* Theme toggle */}
-          <button
-            onClick={toggleTheme}
-            className="p-2 rounded-lg transition-colors"
-            style={{ color: "var(--text-2)" }}
-            onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
-            onMouseLeave={e => (e.currentTarget.style.color = "var(--text-2)")}
-          >
-            {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
-
+        <div className="flex items-center gap-4">
           {/* Language selector */}
-          <div className="relative">
+          <div className="relative group">
             <button
               onClick={() => setShowLangMenu(v => !v)}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
-              style={{ color: "var(--text-2)", border: "1px solid var(--border)" }}
-              onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
-              onMouseLeave={e => (e.currentTarget.style.color = "var(--text-2)")}
+              className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-border rounded-full font-black text-xs uppercase tracking-widest text-foreground hover:bg-muted transition-all shadow-pop active:shadow-none active:translate-x-1 active:translate-y-1"
             >
               {currentLang?.short}
-              <ChevronDown size={13} />
+              <ChevronDown size={14} strokeWidth={3} className={showLangMenu ? "rotate-180" : ""} />
             </button>
             {showLangMenu && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowLangMenu(false)} />
-                <div
-                  className="absolute right-0 mt-1 rounded-xl overflow-hidden shadow-lg z-50 py-1 min-w-[140px]"
-                  style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}
-                >
+                <div className="absolute right-0 mt-3 bg-white border-2 border-border rounded-2xl shadow-pop-lg z-50 py-2 min-w-[160px] animate-in slide-in-from-top-2 duration-200">
                   {LANGS.map(l => (
-                    <button
-                      key={l.value}
+                    <button key={l.value}
                       onClick={() => { setLang(l.value); setShowLangMenu(false); }}
-                      className="w-full px-4 py-2 text-sm text-left transition-colors"
-                      style={{
-                        color: lang === l.value ? "var(--accent)" : "var(--text)",
-                        background: lang === l.value ? "var(--accent-s)" : "transparent",
-                        fontWeight: lang === l.value ? 600 : 400,
-                      }}
-                      onMouseEnter={e => { if (lang !== l.value) e.currentTarget.style.background = "var(--bg-3)"; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = lang === l.value ? "var(--accent-s)" : "transparent"; }}
-                    >
+                      className={`w-full px-4 py-2 text-sm text-left font-black uppercase tracking-wider transition-colors
+                        ${lang === l.value ? "bg-accent text-white" : "text-foreground hover:bg-tertiary/20"}`}>
                       {l.label}
                     </button>
                   ))}
@@ -173,41 +147,26 @@ export default function Home() {
             )}
           </div>
 
-          <div className="w-px h-6 mx-1" style={{ background: "var(--border)" }} />
-
           {/* Account */}
           {user ? (
             <div className="relative">
-              <button
-                onClick={() => setShowUserMenu(v => !v)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
-                style={{ color: "var(--text-2)", border: "1px solid var(--border)" }}
-                onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
-                onMouseLeave={e => (e.currentTarget.style.color = "var(--text-2)")}
-              >
-                <User size={14} />
-                <span className="hidden sm:inline max-w-[100px] truncate">{user.email.split("@")[0]}</span>
-                <span style={{ color: "var(--accent)", fontWeight: 700 }}>{user.credits}</span>
+              <button onClick={() => setShowUserMenu(v => !v)}
+                className="btn-candy py-2 px-4 text-xs h-10">
+                <User size={14} strokeWidth={2.5} className="mr-2" />
+                <span className="font-black mr-2 text-foreground">{user?.credits || 0}</span>
+                <ChevronDown size={12} strokeWidth={3} />
               </button>
               {showUserMenu && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
-                  <div
-                    className="absolute right-0 mt-1 rounded-xl shadow-lg z-50 py-1 min-w-[160px]"
-                    style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}
-                  >
-                    <div className="px-4 py-2 border-b" style={{ borderColor: "var(--border)" }}>
-                      <p className="text-xs font-semibold truncate" style={{ color: "var(--text)" }}>{user.email}</p>
-                      <p className="text-xs mt-0.5" style={{ color: "var(--text-3)" }}>{t.balance}: <span style={{ color: "var(--accent)", fontWeight: 700 }}>{user.credits}</span></p>
+                  <div className="absolute right-0 mt-3 bg-white border-2 border-border rounded-2xl shadow-pop-lg z-50 py-3 min-w-[200px] overflow-hidden">
+                    <div className="px-4 pb-3 border-b-2 border-muted mb-2">
+                      <p className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-1">Account</p>
+                      <p className="text-sm font-black text-foreground truncate">{user?.email}</p>
                     </div>
-                    <button
-                      onClick={handleLogout}
-                      className="w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors"
-                      style={{ color: "var(--text-2)" }}
-                      onMouseEnter={e => { e.currentTarget.style.background = "var(--bg-3)"; e.currentTarget.style.color = "var(--text)"; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-2)"; }}
-                    >
-                      <LogOut size={14} />
+                    <button onClick={handleLogout}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm font-black text-secondary hover:bg-secondary/10 transition-colors uppercase tracking-widest">
+                      <LogOut size={16} strokeWidth={2.5} />
                       {t.logout}
                     </button>
                   </div>
@@ -215,208 +174,222 @@ export default function Home() {
               )}
             </div>
           ) : (
-            <button
-              onClick={() => setShowAuth(true)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-white transition-all"
-              style={{ background: "var(--accent)" }}
-              onMouseEnter={e => (e.currentTarget.style.background = "var(--accent-h)")}
-              onMouseLeave={e => (e.currentTarget.style.background = "var(--accent)")}
-            >
-              <LogIn size={14} />
-              {t.login}
+            <button onClick={() => setShowAuth(true)} className="btn-candy h-10 px-6">
+              <LogIn size={16} strokeWidth={2.5} className="mr-2" />
+              <span className="uppercase tracking-widest text-xs">{t.login}</span>
             </button>
           )}
         </div>
       </header>
 
       {/* ── Hero ───────────────────────────────────────────────── */}
-      <main className="flex-1 flex flex-col items-center justify-center px-6 py-16 gap-12">
-        <div className="w-full max-w-2xl flex flex-col items-center gap-6 text-center">
-
-          {/* Badge */}
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold" style={{ background: "var(--accent-s)", color: "var(--accent)" }}>
-            <Zap size={11} />
-            {t.tagline}
-          </div>
-
-          {/* Title */}
-          <h1 className="text-5xl md:text-6xl font-black tracking-tight leading-tight">
-            {t.hero.split("TED").map((part, i, arr) =>
-              i < arr.length - 1 ? (
-                <span key={i}>{part}<span style={{ color: "var(--accent)" }}>TED</span></span>
-              ) : part
-            )}
-          </h1>
-
-          <p className="text-base max-w-xl leading-relaxed" style={{ color: "var(--text-2)" }}>
-            {t.heroSub}
-          </p>
-
-          {/* URL input */}
-          <div className="w-full flex gap-2">
-            <div
-              className="flex-1 flex items-center gap-3 px-4 rounded-xl border transition-colors"
-              style={{ background: "var(--bg-2)", borderColor: error ? "var(--accent)" : "var(--border)" }}
-            >
-              <Search size={16} style={{ color: "var(--text-3)", flexShrink: 0 }} />
-              <input
-                type="text"
-                value={url}
-                onChange={e => { setUrl(e.target.value); setError(""); }}
-                onKeyDown={e => e.key === "Enter" && handleAnalyze()}
-                placeholder={t.placeholder}
-                className="flex-1 bg-transparent border-none outline-none py-3 text-sm"
-                style={{ color: "var(--text)" }}
-                autoComplete="off"
-                spellCheck={false}
-              />
+      <main className="relative flex-1 flex flex-col items-center px-6 pt-24 pb-32 gap-32 z-10 overflow-visible">
+        <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+          
+          {/* Hero Content */}
+          <div className="flex flex-col items-start gap-8 text-left relative">
+            <div className="absolute -top-20 -left-20 w-64 h-64 bg-tertiary rounded-full opacity-40 blur-3xl -z-10" />
+            
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-secondary border-2 border-border rounded-full text-xs font-black uppercase tracking-widest text-white shadow-pop">
+              <Sparkles size={14} strokeWidth={2.5} />
+              {t.tagline}
             </div>
-            <button
-              onClick={handleAnalyze}
-              disabled={!url.trim()}
-              className="px-6 py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-40"
-              style={{ background: "var(--accent)" }}
-              onMouseEnter={e => url.trim() && (e.currentTarget.style.background = "var(--accent-h)")}
-              onMouseLeave={e => (e.currentTarget.style.background = "var(--accent)")}
-            >
-              {t.analyze}
-            </button>
+
+            <h1 className="text-6xl md:text-8xl font-black tracking-tighter leading-[0.9] text-foreground">
+              {t.hero.split("TED").map((part, i, arr) =>
+                i < arr.length - 1 ? (
+                  <span key={i}>{part}<span className="text-accent underline decoration-tertiary decoration-8 underline-offset-8">TED</span></span>
+                ) : part
+              )}
+            </h1>
+
+            <p className="text-xl font-bold max-w-lg leading-relaxed text-muted-foreground border-l-4 border-accent pl-6">
+              {t.heroSub}
+            </p>
+
+            <div className="w-full max-w-md flex flex-col gap-4">
+              <div className={`relative group p-2 bg-white border-[3px] rounded-2xl shadow-pop-lg transition-all focus-within:shadow-none focus-within:translate-x-1 focus-within:translate-y-1 ${error ? "border-secondary" : "border-border"}`}>
+                <div className="flex items-center gap-3 px-3">
+                  <Search size={22} strokeWidth={3} className="text-muted-foreground group-focus-within:text-accent transition-colors shrink-0" />
+                  <input
+                    type="text" value={url} onChange={e => { setUrl(e.target.value); setError(""); }}
+                    onKeyDown={e => e.key === "Enter" && handleAnalyze()}
+                    placeholder={t.placeholder}
+                    className="flex-1 bg-transparent border-none outline-none py-4 text-lg font-black placeholder:text-muted-foreground/50 tracking-tight"
+                    spellCheck={false}
+                  />
+                  <button onClick={handleAnalyze} disabled={!url.trim()}
+                    className="btn-candy h-12 px-6 shadow-pop text-sm font-black whitespace-nowrap active:translate-x-0 active:translate-y-0 disabled:opacity-50 disabled:shadow-none transition-all">
+                    {t.analyze}
+                  </button>
+                </div>
+              </div>
+              {error && (
+                <div className="ml-2 font-black text-secondary text-sm uppercase tracking-widest animate-bounce-short flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-secondary" />
+                  {error}
+                </div>
+              )}
+            </div>
           </div>
 
-          {error && (
-            <p className="text-sm font-medium" style={{ color: "var(--accent)" }}>{error}</p>
-          )}
-        </div>
-
-        {/* ── Featured Talks ───────────────────────────────────────── */}
-        <div className="w-full max-w-4xl flex flex-col gap-4">
-          <div className="flex items-center gap-2">
-            <span className="w-1 h-5 rounded-full" style={{ background: "var(--accent)" }} />
-            <h3 className="font-bold text-base" style={{ color: "var(--text)" }}>{t.featuredTitle}</h3>
-          </div>
-
-          {featuredLoading ? (
-            <div className="overflow-x-auto pb-2" style={{ scrollbarWidth: "thin" }}>
-              <div className="flex gap-3" style={{ width: "max-content" }}>
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="rounded-2xl overflow-hidden border flex-shrink-0" style={{ background: "var(--bg-2)", borderColor: "var(--border)", width: 280 }}>
-                    <div className="animate-pulse" style={{ aspectRatio: "16/9", background: "var(--bg-3)" }} />
-                    <div className="p-3 space-y-2">
-                      <div className="h-3 rounded animate-pulse w-4/5" style={{ background: "var(--bg-3)" }} />
-                      <div className="h-2.5 rounded animate-pulse w-2/5" style={{ background: "var(--bg-3)" }} />
-                    </div>
+          {/* Hero Visual */}
+          <div className="relative flex justify-center lg:justify-end">
+            <div className="relative w-full max-w-sm aspect-square">
+              {/* Geometric Decoration */}
+              <div className="absolute -top-10 -left-10 w-40 h-40 bg-accent rounded-3xl -rotate-12 border-4 border-border shadow-pop-lg -z-10" />
+              <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-quaternary rounded-full border-4 border-border shadow-pop-lg -z-10 flex items-center justify-center">
+                <div className="w-24 h-24 dot-grid opacity-50" />
+              </div>
+              
+              {/* "Blob" Masked Image Placeholder / Visual */}
+              <div className="w-full h-full bg-white border-4 border-border rounded-tl-[100px] rounded-tr-[40px] rounded-br-[100px] rounded-bl-[40px] shadow-pop-lg overflow-hidden relative group">
+                <div className="absolute inset-0 bg-accent/5 dot-grid" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="relative text-center group-hover:scale-110 transition-transform duration-500">
+                    <Play size={80} strokeWidth={2.5} className="text-accent fill-accent" />
+                    <div className="mt-4 font-black uppercase tracking-widest text-accent">Master English</div>
                   </div>
-                ))}
+                </div>
+                <div className="absolute bottom-4 left-4 right-4 bg-white/90 backdrop-blur-md border-2 border-border p-4 rounded-2xl shadow-pop">
+                  <p className="text-xs font-black text-foreground uppercase tracking-widest">{t.aiAnalysis}</p>
+                  <div className="mt-2 space-y-1">
+                    <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                      <div className="h-full bg-accent w-2/3 animate-pulse" />
+                    </div>
+                    <div className="h-2 w-4/5 bg-muted rounded-full" />
+                  </div>
+                </div>
               </div>
             </div>
-          ) : (
-            <div className="overflow-x-auto pb-2" style={{ scrollbarWidth: "thin" }}>
-              <div className="flex gap-3" style={{ width: "max-content" }}>
-                {featured.map(talk => (
-                  <button
-                    key={talk.url}
-                    onClick={() => navigate(talk.url)}
-                    className="group text-left rounded-2xl overflow-hidden border transition-all hover:-translate-y-0.5 flex-shrink-0"
-                    style={{ background: "var(--bg-2)", borderColor: "var(--border)", width: 280 }}
-                    onMouseEnter={e => (e.currentTarget.style.borderColor = "var(--accent)")}
-                    onMouseLeave={e => (e.currentTarget.style.borderColor = "var(--border)")}
-                  >
-                    {/* Thumbnail */}
-                    <div className="relative overflow-hidden" style={{ aspectRatio: "16/9", background: "var(--bg-3)" }}>
-                      {talk.thumbnail ? (
-                        <img
-                          src={talk.thumbnail}
-                          alt={talk.title}
-                          className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Play size={28} style={{ color: "var(--text-3)" }} />
+          </div>
+        </div>
+
+        {/* ── Continue Learning ────────────────────────────────────────── */}
+        {user && history.length > 0 && (
+          <div className="w-full max-w-6xl flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
+            <div className="flex items-center gap-4">
+              <div className="px-4 py-2 bg-accent border-2 border-border rounded-xl shadow-pop rotate-3">
+                <h3 className="font-black text-xl text-white uppercase tracking-tighter">{t.continueLearning}</h3>
+              </div>
+              <div className="flex-1 h-1 bg-border/10 rounded-full" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {history.map((hItem, idx) => {
+                const pct = hItem.duration ? Math.min(100, (hItem.progressTime / hItem.duration) * 100) : 0;
+                return (
+                  <button key={hItem.id}
+                    onClick={() => router.push(`/watch?url=${encodeURIComponent(hItem.videoUrl)}&t=${Math.floor(hItem.progressTime)}`)}
+                    className={`group relative perspective-1000 ${idx % 2 === 0 ? '-rotate-1 hover:rotate-0' : 'rotate-1 hover:rotate-0'} transition-transform`}>
+                    <div className="p-6 bg-white border-2 border-border rounded-2xl shadow-pop-lg group-hover:translate-x-1 group-hover:translate-y-1 group-hover:shadow-none transition-all flex flex-col h-full text-left">
+                      <div className="mb-4 flex items-center justify-between">
+                        <div className="w-8 h-8 rounded-lg border-2 border-border bg-tertiary flex items-center justify-center font-black shadow-pop">
+                          <Play size={12} fill="currentColor" />
                         </div>
-                      )}
-                      {talk.duration > 0 && (
-                        <span
-                          className="absolute bottom-1.5 right-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold"
-                          style={{ background: "rgba(0,0,0,0.75)", color: "#fff" }}
-                        >
-                          <Clock size={9} />
-                          {fmtDuration(talk.duration)}
+                        <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground italic truncate max-w-[120px]">
+                          {hItem.presenter}
                         </span>
-                      )}
-                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: "rgba(0,0,0,0.35)" }}>
-                        <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "var(--accent)" }}>
-                          <Play size={16} fill="white" style={{ color: "white" }} />
+                      </div>
+                      <h4 className="font-black text-lg text-foreground line-clamp-2 leading-tight flex-1 mb-4">{hItem.title}</h4>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-accent">
+                          <span>{Math.floor(hItem.progressTime / 60)} min</span>
+                          <span>{pct.toFixed(0)}%</span>
+                        </div>
+                        <div className="h-3 w-full bg-muted border-2 border-border rounded-full overflow-hidden">
+                          <div className="h-full bg-accent transition-all duration-1000" style={{ width: `${pct}%` }} />
                         </div>
                       </div>
-                    </div>
-                    {/* Info */}
-                    <div className="p-3">
-                      <p className="text-sm font-bold leading-snug line-clamp-2 mb-1" style={{ color: "var(--text)" }}>
-                        {talk.title}
-                      </p>
-                      <p className="text-xs truncate" style={{ color: "var(--text-3)" }}>
-                        {talk.presenter}
-                      </p>
                     </div>
                   </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ── Continue Learning Dashboard ────────────────────────── */}
-        {user && history.length > 0 && (
-          <div className="w-full max-w-4xl flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <h3 className="font-bold text-lg flex items-center gap-2">
-              <Zap size={18} style={{ color: "var(--accent)" }} />
-              {t.continueLearning}
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {history.map((hItem) => {
-                const pct = hItem.duration ? Math.min(100, (hItem.progressTime / hItem.duration) * 100) : 0;
-                const mins = Math.floor(hItem.progressTime / 60);
-                const totalMins = hItem.duration ? Math.floor(hItem.duration / 60) : null;
-                return (
-                  <div
-                    key={hItem.id}
-                    onClick={() => router.push(`/watch?url=${encodeURIComponent(hItem.videoUrl)}&t=${Math.floor(hItem.progressTime)}`)}
-                    className="card p-4 cursor-pointer hover:-translate-y-1 transition-all group relative overflow-hidden"
-                  >
-                    <h4 className="font-bold text-sm line-clamp-2 leading-tight mb-1 group-hover:text-accent transition-colors" style={{ color: "var(--text)" }}>{hItem.title}</h4>
-                    <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>{hItem.presenter}</p>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: "var(--border)" }}>
-                        <div className="h-full transition-all" style={{ width: `${pct}%`, background: "var(--accent)" }} />
-                      </div>
-                      <span className="text-xs shrink-0" style={{ color: "var(--text-3)" }}>
-                        {mins}m{totalMins ? ` / ${totalMins}m` : ""}
-                      </span>
-                    </div>
-                  </div>
                 );
               })}
             </div>
           </div>
         )}
 
+        {/* ── Featured Talks ───────────────────────────────────────── */}
+        <div className="w-full max-w-6xl flex flex-col gap-10">
+          <div className="flex flex-col items-center gap-2">
+            <h3 className="font-black text-4xl uppercase tracking-tighter border-b-8 border-tertiary pb-2">{t.featuredTitle}</h3>
+            <p className="text-muted-foreground font-bold tracking-widest uppercase text-xs">Handpicked for effective learning</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            {featuredLoading ? (
+              Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="bg-white border-2 border-border rounded-2xl shadow-pop p-2 animate-pulse">
+                  <div className="aspect-video bg-muted rounded-xl mb-4" />
+                  <div className="h-4 bg-muted rounded-full w-3/4 mb-2 mx-2" />
+                  <div className="h-3 bg-muted rounded-full w-1/2 mx-2 mb-2" />
+                </div>
+              ))
+            ) : (
+              featured.map((talk, idx) => (
+                <button key={talk.url} onClick={() => navigate(talk.url)}
+                  className={`group bg-white border-2 border-border rounded-2xl shadow-pop-lg transition-all hover:bg-accent/5 relative ${idx % 3 === 0 ? '-rotate-1' : idx % 3 === 1 ? 'rotate-1' : ''}`}>
+                  <div className="relative aspect-video m-2 overflow-hidden rounded-xl border-2 border-border group-hover:rotate-1 transition-transform">
+                    {talk.thumbnail ? (
+                      <img src={talk.thumbnail} alt={talk.title} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full bg-muted flex items-center justify-center">
+                        <Play size={40} className="text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-background/20 group-hover:bg-accent/20 transition-colors" />
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="w-16 h-16 bg-white border-2 border-border rounded-full flex items-center justify-center shadow-pop rotate-12">
+                        <Play size={24} className="text-accent fill-accent translate-x-1" />
+                      </div>
+                    </div>
+                    {talk.duration > 0 && (
+                      <div className="absolute bottom-2 right-2 px-3 py-1 bg-foreground text-background text-[10px] font-black rounded-lg border-2 border-border shadow-pop">
+                        {fmtDuration(talk.duration)}
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-4 pt-2 text-left">
+                    <p className="text-xs font-black text-accent uppercase tracking-widest mb-1 group-hover:text-secondary transition-colors underline decoration-2 underline-offset-4 decoration-border/10">
+                      {talk.presenter}
+                    </p>
+                    <h4 className="text-lg font-black text-foreground line-clamp-2 leading-tight tracking-tight">{talk.title}</h4>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+
         {/* ── Features ─────────────────────────────────────────── */}
-        <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-3 gap-8">
           {features.map((f, i) => (
-            <div key={i} className="card p-6 flex flex-col gap-3">
-              <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: "var(--accent-s)", color: "var(--accent)" }}>
+            <div key={i} className={`group p-8 bg-white border-2 border-border rounded-3xl shadow-pop transition-all hover:-translate-y-2
+              ${i === 0 ? 'bg-accent/5' : i === 1 ? 'bg-secondary/5' : 'bg-tertiary/5'}`}>
+              <div className={`w-16 h-16 rounded-2xl border-2 border-border shadow-pop flex items-center justify-center mb-6 transition-transform group-hover:rotate-12
+                ${i === 0 ? 'bg-accent text-white' : i === 1 ? 'bg-secondary text-white' : 'bg-tertiary text-foreground'}`}>
                 {f.icon}
               </div>
-              <h3 className="font-bold text-base">{f.title}</h3>
-              <p className="text-sm leading-relaxed" style={{ color: "var(--text-2)" }}>{f.desc}</p>
+              <h3 className="text-2xl font-black text-foreground mb-3">{f.title}</h3>
+              <p className="text-muted-foreground font-bold leading-relaxed">{f.desc}</p>
             </div>
           ))}
         </div>
       </main>
 
       {/* ── Footer ─────────────────────────────────────────────── */}
-      <footer className="py-4 text-center text-xs border-t" style={{ color: "var(--text-3)", borderColor: "var(--border)" }}>
-        {t.footer}
+      <footer className="relative py-12 px-6 bg-white border-t-4 border-border overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-1 bg-accent opacity-20" />
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8 text-center md:text-left">
+          <div className="space-y-2">
+            <span className="font-black text-xl tracking-tighter">TED<span className="text-accent">Master</span></span>
+            <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">{t.footer}</p>
+          </div>
+          <div className="flex gap-4">
+            <div className="w-10 h-10 rounded-full border-2 border-border flex items-center justify-center font-black bg-tertiary shadow-pop">T</div>
+            <div className="w-10 h-10 rounded-full border-2 border-border flex items-center justify-center font-black bg-secondary shadow-pop">E</div>
+            <div className="w-10 h-10 rounded-full border-2 border-border flex items-center justify-center font-black bg-accent shadow-pop">D</div>
+          </div>
+        </div>
       </footer>
 
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} onSuccess={(u) => setUser(u)} />}

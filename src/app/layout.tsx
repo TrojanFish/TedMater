@@ -1,9 +1,17 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Outfit, Plus_Jakarta_Sans } from "next/font/google";
 import { AppProvider } from "@/lib/i18n";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
+const outfit = Outfit({ 
+  subsets: ["latin"],
+  variable: "--font-heading",
+});
+
+const plusJakarta = Plus_Jakarta_Sans({ 
+  subsets: ["latin"],
+  variable: "--font-body",
+});
 
 export const metadata: Metadata = {
   title: "TEDMaster | AI-Powered TED English Learning",
@@ -12,8 +20,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="h-full" suppressHydrationWarning>
-      <body className={`${inter.className} min-h-full`}>
+    <html lang="en" className="h-full">
+      <body className={`${outfit.variable} ${plusJakarta.variable} font-body antialiased min-h-full selection:bg-tertiary selection:text-foreground`}>
         <AppProvider>
           {children}
         </AppProvider>
