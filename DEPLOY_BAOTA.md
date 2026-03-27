@@ -136,6 +136,27 @@ npm run build
 
 ## 更新维护
 
+### 1. Docker 全量更新 (方式一)
+当您在本地开发完成后通过 `git push` 推送到 GitHub，可以在服务器上执行：
+```bash
+cd /www/wwwroot/TedMater
+
+# 1. 拉取最新代码
+git pull origin main
+
+# 2. 重新构建镜像 (如 Dockerfile 或代码有改动)
+docker compose build
+
+# 3. 运行数据库迁移 (应用表结构改动)
+docker compose run --rm migrate
+
+# 4. 后台启动/热重启容器
+docker compose up -d tedmaster
+```
+
+---
+
+### 2. 手动部署更新 (方式二)
 ```bash
 cd /www/wwwroot/TedMater
 git pull
