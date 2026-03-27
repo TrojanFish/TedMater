@@ -89,7 +89,7 @@ h1, h2, h3, h4, h5, h6 {
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .card-sticker:hover {
-  transform: translateY(-2px) scale(1.01);
+  /* Removed transform and scale for stability */
   box-shadow: var(--shadow-pop-hover);
 }
 

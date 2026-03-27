@@ -868,9 +868,9 @@ function WatchContent() {
 
         {/* Centered Title */}
         <div className="hidden lg:flex flex-1 mx-8 items-center justify-center min-w-0">
-          <div className="px-5 py-2.5 bg-background border-2 border-border rounded-xl shadow-pop max-w-[500px] w-full flex items-center gap-3 overflow-hidden hover:transform-none">
+          <div className="px-5 py-2 bg-background border-2 border-border rounded-xl shadow-pop-active max-w-[500px] w-full flex items-center gap-3 overflow-hidden">
              <div className="w-2.5 h-2.5 rounded-full bg-accent animate-pulse shrink-0" />
-             <span className="text-sm font-black text-foreground truncate uppercase tracking-tighter italic">{data?.title || t.tagline}</span>
+             <span className="text-xs font-black text-foreground truncate uppercase tracking-tighter italic">{data?.title || t.tagline}</span>
           </div>
         </div>
 
@@ -909,50 +909,41 @@ function WatchContent() {
           {/* Account */}
           {user ? (
             <div className="relative">
-              <button onClick={() => setShowVocab(!showVocab)}
-                className={`flex items-center gap-2 px-4 h-10 border-2 border-border rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-pop active:shadow-none
-                  ${showVocab ? "bg-accent text-white" : "bg-white text-foreground hover:bg-muted"}`}>
-                <BookMarked size={16} strokeWidth={2.5} />
-                <span className="hidden md:inline">{t.wordsTab} ({vocabWords.length})</span>
+              <button onClick={() => setShowUserMenu(v => !v)}
+                className="btn-candy py-2 px-4 text-xs h-10 flex items-center gap-2">
+                <Sparkles size={14} strokeWidth={2.5} className="mr-1 text-tertiary" />
+                <span className="font-black text-foreground">{user?.credits || 0}</span>
+                <ChevronDown size={12} strokeWidth={3} className={showUserMenu ? "rotate-180" : ""} />
               </button>
+              {showUserMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
+                  <div className="absolute right-0 mt-3 bg-white border-2 border-border rounded-2xl shadow-pop-lg z-[150] py-3 min-w-[200px] overflow-hidden animate-in slide-in-from-top-2 duration-200">
+                    <div className="px-4 pb-3 border-b-2 border-muted mb-2">
+                      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Account</p>
+                      <p className="text-sm font-black text-foreground truncate">{user?.email}</p>
+                    </div>
+                    
+                    <button onClick={() => { setShowVocab(true); setShowUserMenu(false); }}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm font-black text-foreground hover:bg-tertiary/10 transition-colors uppercase tracking-widest">
+                      <BookMarked size={16} strokeWidth={2.5} className="text-tertiary" />
+                      {t.wordsTab} ({vocabWords.length})
+                    </button>
+
+                    <button onClick={handleLogout}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm font-black text-secondary hover:bg-secondary/10 transition-colors uppercase tracking-widest border-t-2 border-muted">
+                      <LogOut size={16} strokeWidth={2.5} />
+                      {t.logout}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             <button onClick={() => setShowAuth(true)} className="btn-candy h-10 px-6">
               <LogIn size={16} strokeWidth={2.5} className="mr-2" />
               <span className="uppercase tracking-widest text-xs font-black">{t.login}</span>
             </button>
-          )}
-
-          {user && (
-            <>
-              <div className="w-px h-6 bg-border/20 mx-1 hidden md:block" />
-              <div className="relative">
-                <button onClick={() => setShowUserMenu(!showUserMenu)} 
-                  className="btn-candy py-1.5 px-3 bg-tertiary text-foreground shadow-pop hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-lg bg-white border-2 border-border flex items-center justify-center -rotate-6">
-                    <Sparkles size={12} className="text-accent" strokeWidth={2.5} />
-                  </div>
-                  <span className="text-xs font-black">{user.credits} <span className="text-[10px] opacity-60">PTS</span></span>
-                  <ChevronDown size={14} strokeWidth={3} className={showUserMenu ? "rotate-180" : ""} />
-                </button>
-                {showUserMenu && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
-                    <div className="absolute right-0 mt-3 bg-white border-2 border-border rounded-2xl shadow-pop-lg z-50 py-3 min-w-[200px] overflow-hidden animate-in slide-in-from-top-4 duration-300">
-                      <div className="px-4 pb-3 border-b-2 border-muted mb-2">
-                        <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Account</p>
-                        <p className="text-sm font-black text-foreground truncate">{user.email}</p>
-                      </div>
-                      <button onClick={handleLogout}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-sm font-black text-secondary hover:bg-secondary/10 transition-colors uppercase tracking-widest">
-                        <LogOut size={16} strokeWidth={2.5} />
-                        {t.logout}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </>
           )}
         </div>
       </header>
@@ -998,7 +989,7 @@ function WatchContent() {
       )}
 
       {/* ── Main layout ────────────────────────────────────────── */}
-      <main className="flex-1 flex flex-col lg:flex-row gap-6 p-4 sm:p-8 relative z-10 lg:h-[calc(100vh-140px)] min-h-0 overflow-hidden print-hidden">
+      <main className="flex-1 flex flex-col lg:flex-row gap-6 p-4 sm:p-8 relative z-10 lg:h-[calc(100vh-140px)] min-h-[600px] lg:overflow-hidden print-hidden">
 
         {/* ── Video player ─────────────────────────────────────── */}
         <section className="flex-[3] flex flex-col gap-4 min-w-0 h-full">
@@ -1164,7 +1155,7 @@ function WatchContent() {
         </section>
 
         {/* ── Transcript panel ──────────────────────────────────── */}
-        <section className="flex-[2] flex flex-col gap-4 min-w-0 h-full">
+        <section className="flex-[2] flex flex-col gap-4 min-w-0 h-full max-h-[50vh] lg:max-h-none overflow-hidden">
           <div className="card-sticker bg-white flex flex-col p-0 overflow-hidden shadow-pop-lg h-full hover:transform-none animate-in fade-in slide-in-from-right-8 duration-500 delay-100">
             <div className="px-6 py-4 border-b-2 border-border flex items-center justify-between bg-white sticky top-0 z-20">
               <div className="flex items-center gap-3">
