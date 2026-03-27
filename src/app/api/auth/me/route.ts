@@ -5,7 +5,8 @@ import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
-const JWT_SECRET = process.env.JWT_SECRET || "TEDMASTER-SUPER-SECRET-123";
+const JWT_SECRET = process.env.JWT_SECRET as string;
+if (!JWT_SECRET) throw new Error("JWT_SECRET environment variable is not set");
 
 export async function GET() {
   try {

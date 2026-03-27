@@ -4,10 +4,11 @@ import { useEffect, useState, useRef, useCallback, useMemo, Suspense } from "rea
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  ChevronLeft, Play, Pause, Settings, Loader2, Sparkles, X, Home,
-  PlayCircle, Mic, FastForward, BookMarked, Sliders, Download,
-  FileText, Video, FileCode, Check, Sun, Moon, ChevronDown, 
-  Book, FileEdit, Maximize, PictureInPicture, Volume, Volume1, Volume2, Lock, LogOut, History as HistoryIcon
+  Play, Pause, Settings, Loader2, Sparkles, X, Home,
+  Mic, FastForward, BookMarked, Sliders,
+  FileText, Video, FileCode, Sun, Moon,
+  Maximize, PictureInPicture, Volume, Volume1, Volume2, Lock, LogOut, History as HistoryIcon,
+  MoreHorizontal, Globe
 } from "lucide-react";
 
 const GithubIcon = () => (
@@ -16,71 +17,72 @@ const GithubIcon = () => (
   </svg>
 );
 import Hls from "hls.js";
-import LearningNotebook, { SavedSentence, VocabItem } from "@/components/LearningNotebook";
-import { useApp, LANGS } from "@/lib/i18n";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import LearningNotebook from "@/components/LearningNotebook";
+import { useApp, LANGS, SUBTITLE_LANGS } from "@/lib/i18n";
 import AuthModal from "@/components/AuthModal";
-
-interface TranscriptItem {
-  id: number;
-  startTime: number;
-  english: string;
-  translated: string;
-}
+import HistoryModal from "./components/HistoryModal";
+import WordLookupModal from "./components/WordLookupModal";
+import AIAnalysisPanel from "./components/AIAnalysisPanel";
+import PrintView from "./components/PrintView";
+import PrintConfigModal from "./components/PrintConfigModal";
+import type { TranscriptItem, AnalysisResult, ParsedData, HistoryItem, VocabItem, SavedSentence } from "./types";
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
-/* ── Shared header controls (GitHub / Theme / Lang) ───────────── */
-function HeaderControls() {
-  const { t, theme, toggleTheme, lang, setLang } = useApp();
-  const [showLang, setShowLang] = useState(false);
-  const currentLang = LANGS.find(l => l.value === lang);
-  return (
-    <div className="flex items-center gap-1">
-      <a href="https://github.com/TrojanFish/TedMater" target="_blank" rel="noopener noreferrer"
-        className="p-2 rounded-lg transition-colors" style={{ color: "var(--text-2)" }}
-        onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
-        onMouseLeave={e => (e.currentTarget.style.color = "var(--text-2)")} title={t.github}>
-        <GithubIcon />
-      </a>
-      <button onClick={toggleTheme} className="p-2 rounded-lg transition-colors"
-        style={{ color: "var(--text-2)" }}
-        onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
-        onMouseLeave={e => (e.currentTarget.style.color = "var(--text-2)")}>
-        {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
-      </button>
-      <div className="relative">
-        <button onClick={() => setShowLang(v => !v)}
-          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium"
-          style={{ color: "var(--text-2)", border: "1px solid var(--border)" }}>
-          {currentLang?.short}<ChevronDown size={11} />
-        </button>
-        {showLang && (
-          <div className="absolute right-0 mt-1 rounded-xl overflow-hidden shadow-xl z-[200] py-1 min-w-[140px]"
-            style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}>
-            {LANGS.map(l => (
-              <button key={l.value} onClick={() => { setLang(l.value); setShowLang(false); }}
-                className="w-full px-4 py-2 text-sm text-left transition-colors"
-                style={{ color: lang === l.value ? "var(--accent)" : "var(--text)", background: lang === l.value ? "var(--accent-s)" : "transparent", fontWeight: lang === l.value ? 600 : 400 }}
-                onMouseEnter={e => { if (lang !== l.value) e.currentTarget.style.background = "var(--bg-3)"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = lang === l.value ? "var(--accent-s)" : "transparent"; }}>
-                {l.label}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 /* ── Main watch component ─────────────────────────────────────── */
 function WatchContent() {
-  const { lang, t } = useApp();
+  const { lang, t, theme, toggleTheme, setLang, subtitleLang, setSubtitleLang } = useApp();
   const searchParams = useSearchParams();
   const router = useRouter();
   const videoUrlParam = searchParams.get("url");
 
-  const [data, setData] = useState<{ title: string; presenter: string; videoUrl: string; downloadUrl: string; isHls: boolean; transcript: TranscriptItem[] } | null>(null);
+  // ── Transcript / translation localStorage cache ────────────────
+  const CACHE_TTL = 30 * 24 * 60 * 60 * 1000;        // 30 days — transcript text (stable)
+  const TRANSLATION_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days — translations may be updated
+
+  const slugFromUrl = (url: string): string => {
+    const m = url.match(/ted\.com\/talks\/([^/?#]+)/);
+    return m ? m[1] : url.replace(/[^a-z0-9]/gi, "_").slice(-40);
+  };
+
+  const readTranscriptCache = (slug: string): TranscriptItem[] | null => {
+    try {
+      const raw = localStorage.getItem(`tm_transcript_${slug}`);
+      if (!raw) return null;
+      const { transcript, timestamp } = JSON.parse(raw);
+      if (Date.now() - timestamp > CACHE_TTL) { localStorage.removeItem(`tm_transcript_${slug}`); return null; }
+      return transcript;
+    } catch { return null; }
+  };
+
+  const writeTranscriptCache = (slug: string, transcript: TranscriptItem[]) => {
+    try {
+      localStorage.setItem(`tm_transcript_${slug}`, JSON.stringify({
+        transcript: transcript.map(({ id, startTime, english }) => ({ id, startTime, english, translated: "" })),
+        timestamp: Date.now(),
+      }));
+    } catch { /* quota exceeded — silently skip */ }
+  };
+
+  const readTranslationCache = (slug: string, lang: string): string[] | null => {
+    try {
+      const raw = localStorage.getItem(`tm_translation_${slug}_${lang}`);
+      if (!raw) return null;
+      const { translations, timestamp } = JSON.parse(raw);
+      if (Date.now() - timestamp > TRANSLATION_CACHE_TTL) { localStorage.removeItem(`tm_translation_${slug}_${lang}`); return null; }
+      return translations;
+    } catch { return null; }
+  };
+
+  const writeTranslationCache = (slug: string, lang: string, translations: string[]) => {
+    try {
+      localStorage.setItem(`tm_translation_${slug}_${lang}`, JSON.stringify({ translations, timestamp: Date.now() }));
+    } catch { /* quota exceeded — silently skip */ }
+  };
+  // ──────────────────────────────────────────────────────────────
+
+  const [data, setData] = useState<ParsedData | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -102,37 +104,406 @@ function WatchContent() {
   // AI
   const [activeWord, setActiveWord] = useState<VocabItem & { loading?: boolean } | null>(null);
   const [wordLoading, setWordLoading] = useState(false);
-  const [analysisData, setAnalysisData] = useState<Record<number, { structureZh: string; breakdown: { label: string; content: string; explanation: string }[]; insights: { title: string; content: string }[] }>>({});
+  const [analysisData, setAnalysisData] = useState<Record<number, AnalysisResult>>({});
   const [analysisLoading, setAnalysisLoading] = useState<number | null>(null);
+  const [analysisPanelId, setAnalysisPanelId] = useState<number | null>(null);
   const [vocabWords, setVocabWords] = useState<VocabItem[]>([]);
   const [savedSentences, setSavedSentences] = useState<SavedSentence[]>([]);
   const [showVocab, setShowVocab] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [noteInput, setNoteInput] = useState("");
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [printConfig, setPrintConfig] = useState({ vocab: true, script: true, analysis: true, notes: true });
+  const [transcribeStatus, setTranscribeStatus] = useState<string>('');
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isLoadingSubtitles, setIsLoadingSubtitles] = useState(false);
+  const [isAiTranslating, setIsAiTranslating] = useState(false);
+  const workerRef = useRef<Worker | null>(null);
+
+  useEffect(() => {
+    return () => {
+      workerRef.current?.terminate();
+    };
+  }, []);
+
+  // Capture audio into a 16 kHz Float32Array by spinning up a hidden <video>
+  // with the same HLS/MP4 source.  We use a *separate* element so the main
+  // player is never disrupted and createMediaElementSource() can be called
+  // freely (it is a one-shot API per element).
+  // playbackRate = 1 is mandatory — at higher rates the audio is
+  // time-compressed and ASR models trained on normal-speed speech will fail.
+  const captureAudioFromHiddenVideo = (
+    onStatus: (s: string) => void
+  ): Promise<Float32Array> =>
+    new Promise((resolve, reject) => {
+      if (!data?.videoUrl) { reject(new Error('视频源不可用')); return; }
+
+      // Hidden video — must be in the DOM for autoplay to work
+      const cap = document.createElement('video');
+      cap.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;left:-9999px';
+      cap.muted = true;   // muted → autoplay allowed without prior gesture
+      document.body.appendChild(cap);
+
+      let hlsInstance: Hls | null = null;
+
+      if (data.isHls && Hls.isSupported()) {
+        hlsInstance = new Hls({ enableWorker: false });
+        hlsInstance.loadSource(data.videoUrl);
+        hlsInstance.attachMedia(cap);
+      } else if (data.isHls && cap.canPlayType('application/vnd.apple.mpegurl')) {
+        cap.src = data.videoUrl; // native HLS (Safari)
+      } else {
+        cap.src = data.videoUrl; // MP4 direct
+      }
+
+      const teardown = () => {
+        try { document.body.removeChild(cap); } catch { /* already removed */ }
+        if (hlsInstance) { hlsInstance!.destroy(); hlsInstance = null; }
+      };
+
+      const startCapture = () => {
+        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+        const buffers: Float32Array[] = [];
+
+        let source: MediaElementAudioSourceNode;
+        try {
+          // muted=true does NOT silence MediaElementAudioSourceNode —
+          // the Web Audio API intercepts decoded PCM before the mute flag applies.
+          source = audioCtx.createMediaElementSource(cap);
+        } catch {
+          audioCtx.close();
+          teardown();
+          reject(new Error('无法绑定视频音频源，请刷新页面后重试'));
+          return;
+        }
+
+        const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+        processor.onaudioprocess = (e: AudioProcessingEvent) => {
+          buffers.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+        };
+        source.connect(processor);
+        processor.connect(audioCtx.destination); // processor must be connected to stay active
+
+        const durSec = isFinite(cap.duration) ? cap.duration : 0;
+        onStatus(`正在提取音频 0%${durSec > 0 ? `（约需 ${Math.ceil(durSec / 60)} 分钟）` : ''}...`);
+
+        const onTimeUpdate = () => {
+          const d = cap.duration;
+          if (d > 0 && isFinite(d)) {
+            const pct = Math.round((cap.currentTime / d) * 100);
+            const remMin = Math.ceil((d - cap.currentTime) / 60);
+            onStatus(`正在提取音频 ${pct}%${remMin > 0 ? `（还需约 ${remMin} 分钟）` : ''}...`);
+          }
+        };
+
+        const finish = (err?: Error) => {
+          cap.removeEventListener('timeupdate', onTimeUpdate);
+          processor.disconnect();
+          try { source.disconnect(); } catch { /* ignore */ }
+          audioCtx.close();
+          teardown();
+          if (err) { reject(err); return; }
+          const total = buffers.reduce((s, b) => s + b.length, 0);
+          const out = new Float32Array(total);
+          let off = 0;
+          for (const b of buffers) { out.set(b, off); off += b.length; }
+          resolve(out);
+        };
+
+        cap.addEventListener('timeupdate', onTimeUpdate);
+        cap.addEventListener('ended', () => finish(), { once: true });
+        cap.addEventListener('error', () => finish(new Error('视频捕获出错')), { once: true });
+
+        // playbackRate MUST stay at 1×.
+        // Higher rates time-compress the audio — ASR models expect normal-speed speech.
+        cap.playbackRate = 1;
+        cap.play().catch(e => finish(e instanceof Error ? e : new Error(String(e))));
+      };
+
+      cap.addEventListener('canplay', startCapture, { once: true });
+      cap.addEventListener('error', () => {
+        teardown();
+        reject(new Error('视频加载失败，无法提取音频'));
+      }, { once: true });
+    });
+
+  const handleTranscribe = async () => {
+    if (!data) return;
+    setIsTranscribing(true);
+    setTranscribeStatus(t.preparingAudio);
+
+    try {
+      // 0. Try YouTube subtitle fallback first (instant & reliable)
+      if (data.youtubeTranscriptUrl) {
+        try {
+          console.log("[ASR] Attempting YouTube subtitle fallback...");
+          const ytRes = await fetch(data.youtubeTranscriptUrl);
+          if (ytRes.ok) {
+            const ytData = await ytRes.json();
+            if (ytData.transcript && ytData.transcript.length > 0) {
+              console.log("[ASR] YouTube subtitles found, skipping Moonshine.");
+              setData({ ...data, transcript: ytData.transcript, needsTranscription: false });
+              setIsTranscribing(false);
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn("[ASR] YouTube fallback failed, continuing to Moonshine.", e);
+        }
+      }
+
+      let float32Data: Float32Array | null = null;
+      let lastError = "";
+
+      // 1. Server-side HLS audio extraction — parallel segment fetch + TS demux on server
+      //    Returns raw ADTS AAC which the browser decodes instantly via decodeAudioData.
+      //    Much faster than real-time capture (seconds vs. full video duration).
+      if (!float32Data && data.isHls && data.hlsUrl) {
+        try {
+          setTranscribeStatus('正在提取音频 (服务端解析中)...');
+          const res = await fetch(`/api/extract-audio?url=${encodeURIComponent(data.hlsUrl)}`);
+          if (res.ok) {
+            const ct = res.headers.get('content-type') || '';
+            if (!ct.includes('text/html')) {
+              const arrayBuffer = await res.arrayBuffer();
+              const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+              try {
+                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+                float32Data = audioBuffer.getChannelData(0);
+              } finally {
+                audioCtx.close();
+              }
+            }
+          } else {
+            lastError = `extract-audio: HTTP ${res.status}`;
+            console.warn('[ASR] extract-audio failed:', lastError);
+          }
+        } catch (e: any) {
+          lastError = e.message;
+          console.warn('[ASR] extract-audio error:', e);
+        }
+      }
+
+      // 2. Try downloading audio via proxy / direct CDN sources
+      const sources = data.transcribeSources && data.transcribeSources.length > 0
+        ? data.transcribeSources
+        : [data.transcribeUrl || data.videoUrl];
+
+      for (const url of sources) {
+        try {
+          console.log("[ASR] Trying source:", url);
+          const res = await fetch(url);
+          if (res.ok) {
+            // Guard: reject HTML responses (e.g. TED login-page redirects)
+            const ct = res.headers.get('content-type') || '';
+            if (ct.includes('text/html')) {
+              lastError = '收到 HTML 而非音频 (可能需要登录)';
+              continue;
+            }
+            const arrayBuffer = await res.arrayBuffer();
+            const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+            const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+            float32Data = audioBuffer.getChannelData(0);
+            audioCtx.close();
+            break;
+          } else {
+            const errData = await res.json().catch(() => ({}));
+            lastError = errData.details || `HTTP ${res.status}`;
+          }
+        } catch (e: any) {
+          lastError = e.message;
+        }
+      }
+
+      // 3. Last resort: real-time hidden-video capture (as long as the video itself)
+      if (!float32Data) {
+        console.log("[ASR] All fast sources failed, falling back to hidden-video capture. lastError:", lastError);
+        setTranscribeStatus('正在加载视频以提取音频...');
+        float32Data = await captureAudioFromHiddenVideo(setTranscribeStatus);
+      }
+
+      // 4. Initialize worker (once)
+      if (!workerRef.current) {
+        workerRef.current = new Worker(new URL('../../workers/transcribeWorker.ts', import.meta.url));
+        workerRef.current.onmessage = (e) => {
+          const { status, message, transcript } = e.data;
+          if (status === 'loading' || status === 'processing' || status === 'ready') {
+            setTranscribeStatus(message);
+          } else if (status === 'done') {
+            setData((prev: any) => {
+              const slug = prev?.slug || slugFromUrl(videoUrlParam || "");
+              if (slug) writeTranscriptCache(slug, transcript);
+              return { ...prev, transcript, needsTranscription: false };
+            });
+            setIsTranscribing(false);
+            setTranscribeStatus('');
+          } else if (status === 'error') {
+            alert('转录失败: ' + message);
+            setIsTranscribing(false);
+          }
+        };
+      }
+
+      // 5. Send audio to worker
+      setTranscribeStatus('初始化 AI 引擎...');
+      workerRef.current.postMessage({ type: 'transcribe', audio: float32Data });
+    } catch (err: any) {
+      console.error('[ASR] Fatal error:', err);
+      alert('音频处理失败: ' + err.message);
+      setIsTranscribing(false);
+    }
+  };
+
+  // AbortController for in-flight subtitle fetch — cancelled on rapid language switches
+  const subtitleAbortRef = useRef<AbortController | null>(null);
+
+  // Change subtitle language without re-parsing the full video
+  const handleSubtitleLangChange = async (newLang: string) => {
+    setSubtitleLang(newLang);
+    if (!videoUrlParam) return;
+
+    if (newLang === "en") {
+      setData(prev => prev
+        ? { ...prev, transcript: prev.transcript.map(item => ({ ...item, translated: "" })), isTranslationMissing: false }
+        : prev);
+      return;
+    }
+
+    // Check translation cache before hitting the network
+    const slug = data?.slug || slugFromUrl(videoUrlParam || "");
+    const cached = slug ? readTranslationCache(slug, newLang) : null;
+    if (cached && data && cached.length === data.transcript.length) {
+      setData(prev => prev ? {
+        ...prev,
+        transcript: prev.transcript.map((item, i) => ({ ...item, translated: cached[i] || "" })),
+        isTranslationMissing: false,
+      } : prev);
+      return;
+    }
+
+    // Cancel any previous in-flight request
+    subtitleAbortRef.current?.abort();
+    subtitleAbortRef.current = new AbortController();
+
+    setIsLoadingSubtitles(true);
+    try {
+      const res = await fetch(
+        `/api/subtitles?url=${encodeURIComponent(videoUrlParam)}&lang=${newLang}`,
+        { signal: subtitleAbortRef.current.signal }
+      );
+      const { translatedCues, isTranslationMissing } = await res.json();
+      setData(prev => {
+        if (!prev) return prev;
+        const newTranscript = prev.transcript.map(item => {
+          const match = translatedCues.find((c: any) => Math.abs(c.time - item.startTime) < 1000);
+          return { ...item, translated: match ? match.text : "" };
+        });
+        // Cache the result for future visits
+        if (slug && !isTranslationMissing) {
+          writeTranslationCache(slug, newLang, newTranscript.map((i: TranscriptItem) => i.translated));
+        }
+        return { ...prev, transcript: newTranscript, isTranslationMissing };
+      });
+    } catch (e: any) {
+      if (e.name !== "AbortError") console.warn("[subtitles] Failed to load", e);
+    } finally {
+      setIsLoadingSubtitles(false);
+    }
+  };
+
+  // AI translate the full transcript when TED has no official translation
+  const AI_TRANSLATE_COST = 20;
+  const handleAiTranslate = async () => {
+    if (!data || !user) return;
+    if (user.credits < AI_TRANSLATE_COST) {
+      alert(lang === "en"
+        ? `Insufficient credits. Need ${AI_TRANSLATE_COST} pts.`
+        : `积分不足，需要 ${AI_TRANSLATE_COST} 积分`);
+      return;
+    }
+
+    setIsAiTranslating(true);
+    try {
+      // 1. Deduct credits first
+      const creditRes = await fetch("/api/user/credits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "AI_TRANSLATE" }),
+      });
+      if (!creditRes.ok) {
+        const err = await creditRes.json();
+        throw new Error(err.error || "Credit deduction failed");
+      }
+      const { credits: newCredits } = await creditRes.json();
+      setUser(prev => prev ? { ...prev, credits: newCredits } : prev);
+
+      // 2. Run translation in batches via Gemini
+      const englishSentences = data.transcript.map(item => item.english);
+      const aiRes = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "translate",
+          sentences: englishSentences,
+          targetLang: subtitleLang,
+        }),
+      });
+      if (!aiRes.ok) throw new Error("Translation API failed");
+
+      const { translations } = await aiRes.json();
+
+      // 3. Merge translations into transcript and cache
+      const slug = data.slug || slugFromUrl(videoUrlParam || "");
+      if (slug) writeTranslationCache(slug, subtitleLang, translations);
+      setData(prev => {
+        if (!prev) return prev;
+        const newTranscript = prev.transcript.map((item, i) => ({
+          ...item,
+          translated: translations[i] ?? "",
+        }));
+        return { ...prev, transcript: newTranscript, isTranslationMissing: false };
+      });
+    } catch (err: any) {
+      console.error("[AI Translate]", err);
+      alert(err.message);
+    } finally {
+      setIsAiTranslating(false);
+    }
+  };
 
   // Recording
   const [recordingId, setRecordingId] = useState<number | null>(null);
   const [audioUrls, setAudioUrls] = useState<Record<number, string>>({});
   const [user, setUser] = useState<{ email: string; credits: number } | null>(null);
+  // Keep a ref in sync with user so HLS cleanup can read it without being a dep
+  const userRef = useRef<{ email: string; credits: number } | null>(null);
+  useEffect(() => { userRef.current = user; }, [user]);
   const [showAuth, setShowAuth] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [historyItems, setHistoryItems] = useState<any[]>([]);
+  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const activeParagraphRef = useRef<HTMLDivElement>(null);
+  const transcriptScrollRef = useRef<HTMLDivElement>(null);
   const [lastActiveIndex, setLastActiveIndex] = useState(-1);
 
-  /* ── RAF sync ──────────────────────────────────────────────── */
+  /* ── RAF sync (throttled: only update when time changes by >50ms) ── */
+  const lastSyncedTime = useRef(-1);
   useEffect(() => {
     if (!isPlaying) return;
     let rafId: number;
     const update = () => {
-      if (videoRef.current) setCurrentTime(videoRef.current.currentTime * 1000 + subtitleOffset);
+      if (videoRef.current) {
+        const t = videoRef.current.currentTime * 1000 + subtitleOffset;
+        if (Math.abs(t - lastSyncedTime.current) >= 50) {
+          lastSyncedTime.current = t;
+          setCurrentTime(t);
+        }
+      }
       rafId = requestAnimationFrame(update);
     };
     rafId = requestAnimationFrame(update);
@@ -142,7 +513,11 @@ function WatchContent() {
   /* ── Hotkeys ───────────────────────────────────────────────── */
   useEffect(() => {
     const handleKeys = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { setActiveWord(null); setShowExportMenu(false); setShowSettings(false); return; }
+      if (e.key === "Escape") {
+        setActiveWord(null); setShowExportMenu(false); setShowSettings(false);
+        setShowMoreMenu(false); setShowHistory(false); setShowVocab(false); setAnalysisPanelId(null);
+        return;
+      }
       if (activeWord || analysisLoading !== null) return;
       if (e.code === "Space") { e.preventDefault(); togglePlay(); }
       if (e.code === "ArrowLeft") { e.preventDefault(); if (videoRef.current) videoRef.current.currentTime -= 5; }
@@ -175,22 +550,36 @@ function WatchContent() {
         const uRes = await fetch("/api/auth/me");
         if (uRes.ok) { const d = await uRes.json(); setUser(d.user); }
 
-        const tedLangMap: Record<string, string> = {
-          "zh": "zh-cn",
-          "zh-tw": "zh-tw",
-          "ja": "ja",
-          "en": "en"
-        };
         const res = await fetch("/api/parse", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            url: videoUrlParam, 
-            targetLang: tedLangMap[lang] || "zh-cn" 
-          }),
+          body: JSON.stringify({ url: videoUrlParam, targetLang: subtitleLang }),
         });
         const result = await res.json();
         if (!res.ok) { router.push("/"); return; }
+
+        const slug = result.slug || slugFromUrl(videoUrlParam!);
+
+        // Overlay cached Whisper transcript (so user doesn't have to re-transcribe)
+        if (result.needsTranscription) {
+          const cached = readTranscriptCache(slug);
+          if (cached) {
+            result.transcript = cached;
+            result.needsTranscription = false;
+          }
+        }
+
+        // Overlay cached translation for current subtitle language
+        if (subtitleLang !== "en") {
+          const cachedTrans = readTranslationCache(slug, subtitleLang);
+          if (cachedTrans && cachedTrans.length === result.transcript.length) {
+            result.transcript = result.transcript.map((item: TranscriptItem, i: number) => ({
+              ...item, translated: cachedTrans[i] || item.translated,
+            }));
+            result.isTranslationMissing = false;
+          }
+        }
+
         setData(result);
       } catch { router.push("/"); }
       finally { setLoading(false); }
@@ -202,7 +591,7 @@ function WatchContent() {
       if (Array.isArray(hData)) setHistoryItems(hData);
     }).catch(() => {});
 
-  }, [videoUrlParam, router, lang]);
+  }, [videoUrlParam, router]);
 
   /* ── HLS setup ─────────────────────────────────────────────── */
   useEffect(() => {
@@ -228,10 +617,10 @@ function WatchContent() {
        video.currentTime = Number(startProgress);
     }
 
-    return () => { 
-      if (hls) hls.destroy(); 
-      // 卸载时上报进度
-      if (user && video.currentTime > 0) {
+    return () => {
+      if (hls) hls.destroy();
+      // 卸载时上报进度 — use ref so this doesn't re-run when user credits update
+      if (userRef.current && video.currentTime > 0) {
         fetch("/api/user/history", {
            method: "POST",
            headers: { "Content-Type": "application/json" },
@@ -242,11 +631,11 @@ function WatchContent() {
              progressTime: video.currentTime,
              duration: video.duration
            }),
-           keepalive: true // 确保跳转也能发出去
+           keepalive: true
          }).catch(() => {});
       }
     };
-  }, [data, user, videoUrlParam, searchParams]);
+  }, [data, videoUrlParam, searchParams]);
 
   /* ── Active index ──────────────────────────────────────────── */
   const findActiveIndex = useCallback(() => {
@@ -265,12 +654,20 @@ function WatchContent() {
   const activeIndex = useMemo(() => findActiveIndex(), [findActiveIndex]);
   const activeItem = activeIndex !== -1 ? data?.transcript[activeIndex] : null;
 
+  /* ── Virtual transcript list ────────────────────────────────── */
+  const rowVirtualizer = useVirtualizer({
+    count: data?.transcript?.length ?? 0,
+    getScrollElement: () => transcriptScrollRef.current,
+    estimateSize: () => 82,
+    overscan: 4,
+  });
+
   useEffect(() => {
     if (activeIndex !== -1 && activeIndex !== lastActiveIndex) {
       setLastActiveIndex(activeIndex);
-      setTimeout(() => activeParagraphRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+      rowVirtualizer.scrollToIndex(activeIndex, { align: "center", behavior: "smooth" });
     }
-  }, [activeIndex, lastActiveIndex]);
+  }, [activeIndex, lastActiveIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Helpers ───────────────────────────────────────────────── */
   const formatTime = (ms: number) => {
@@ -355,6 +752,9 @@ function WatchContent() {
     if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
   };
 
+  // AbortController for in-flight word lookup — cancelled when user clicks a different word
+  const wordAbortRef = useRef<AbortController | null>(null);
+
   const deductPoints = async (action: "WORD_LOOKUP" | "AI_ANALYZE" | "PDF_EXPORT") => {
     if (!user) { setShowAuth(true); return false; }
     try {
@@ -371,21 +771,29 @@ function WatchContent() {
   };
 
   const handleDeepAnalyze = async (item: TranscriptItem, preloaded?: any) => {
-    if (preloaded) { setAnalysisData(prev => ({ ...prev, [item.id]: preloaded })); return; }
-    if (analysisData[item.id]) { const { [item.id]: _, ...rest } = analysisData; setAnalysisData(rest); return; }
-
-    if (!preloaded) {
-      if (! (await deductPoints("AI_ANALYZE")) ) return;
+    if (preloaded) {
+      setAnalysisData(prev => ({ ...prev, [item.id]: preloaded }));
+      setAnalysisPanelId(item.id);
+      return;
     }
+    // Already cached — just open the panel
+    if (analysisData[item.id]) {
+      setAnalysisPanelId(item.id);
+      return;
+    }
+
+    if (!(await deductPoints("AI_ANALYZE"))) return;
 
     videoRef.current?.pause(); setIsPlaying(false);
     setAnalysisLoading(item.id);
+    const ac = new AbortController();
     try {
-      const res = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "analyze", text: item.english }) });
+      const res = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "analyze", text: item.english }), signal: ac.signal });
       const result = await res.json();
       if (!res.ok) throw new Error(result.error);
       setAnalysisData(prev => ({ ...prev, [item.id]: result }));
-    } catch (e) { console.error(e); }
+      setAnalysisPanelId(item.id);
+    } catch (e: any) { if (e.name !== "AbortError") console.error(e); }
     finally { setAnalysisLoading(null); }
   };
 
@@ -413,264 +821,195 @@ function WatchContent() {
     <div className="h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
 
       {/* ── Print view ── */}
-      <div id="print-view" className="hidden-on-screen bg-white text-black w-full font-sans">
-        <div style={{ borderBottom: "4px solid #E62B1E", paddingBottom: "10px", marginBottom: "14px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div>
-              <div style={{ fontSize: "9px", fontWeight: 900, letterSpacing: "0.2em", textTransform: "uppercase", color: "#E62B1E", marginBottom: "3px" }}>TEDMaster · Learning Script</div>
-              <div style={{ fontSize: "16px", fontWeight: 900 }}>{data?.title}</div>
-              <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>{data?.presenter}</div>
-            </div>
-            <div style={{ fontSize: "9px", color: "#aaa", textAlign: "right" }}>
-              <div>{new Date().toLocaleDateString()}</div>
-              <div>{data?.transcript?.length} sentences</div>
-            </div>
-          </div>
-        </div>
-        <div>
-          {printConfig.vocab && vocabWords.length > 0 && (
-            <div style={{ marginBottom: "20px", borderBottom: "1px dashed #eee", paddingBottom: "15px" }}>
-               <h4 style={{ fontSize: "10px", fontWeight: 900, textTransform: "uppercase", color: "#E62B1E", marginBottom: "8px" }}>Vocabulary List</h4>
-               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                  {vocabWords.map((v, i) => (
-                    <div key={i} style={{ fontSize: "9px", border: "1px solid #f5f5f5", padding: "6px", borderRadius: "4px" }}>
-                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
-                         <span style={{ fontWeight: 700 }}>{v.word}</span>
-                         <span style={{ color: "#aaa" }}>{v.partOfSpeech}</span>
-                       </div>
-                       <div style={{ color: "#666" }}>{v.definitionZh}</div>
-                    </div>
-                  ))}
-               </div>
-            </div>
-          )}
-
-          {printConfig.script && data?.transcript?.map((item, i) => (
-            <div key={i} style={{ display: "flex", gap: "8px", padding: "4px 0", borderBottom: "1px solid #f0f0f0", pageBreakInside: "avoid", breakInside: "avoid" }}>
-              <span style={{ fontSize: "8px", color: "#ccc", fontFamily: "monospace", width: "20px", flexShrink: 0, paddingTop: "2px", textAlign: "right" }}>{i + 1}</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: "11px", lineHeight: 1.5, color: "#111", fontWeight: 500 }}>{item.english}</div>
-                {item.translated && <div style={{ fontSize: "10px", lineHeight: 1.4, color: "#888", marginTop: "1px" }}>{item.translated}</div>}
-                
-                {printConfig.analysis && (analysisData[item.id] || savedSentences.find(s => s.id === item.id)?.analysis) && (
-                   (() => {
-                     const analysis = analysisData[item.id] || savedSentences.find(s => s.id === item.id)?.analysis;
-                     return (
-                       <div style={{ marginTop: "6px", padding: "8px", background: "#f8f9fa", border: "1px solid #e9ecef", borderRadius: "6px" }}>
-                          <div style={{ fontSize: "9px", fontWeight: 700, color: "#E62B1E", textTransform: "uppercase", marginBottom: "4px", display: "flex", alignItems: "center", gap: "4px" }}>
-                            <Sparkles size={8} /> AI Structure Analysis
-                          </div>
-                          <div style={{ fontSize: "10px", color: "#333", fontStyle: "italic", marginBottom: "6px" }}>{analysis.structureZh}</div>
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "2px" }}>
-                             {analysis.breakdown?.map((b: any, bi: number) => (
-                               <div key={bi} style={{ display: "flex", gap: "6px", fontSize: "9px", borderLeft: "2px solid #E62B1E", paddingLeft: "6px" }}>
-                                  <span style={{ fontWeight: 800, color: "#E62B1E", flexShrink: 0 }}>{b.label}</span>
-                                  <span style={{ color: "#555" }}>{b.content}</span>
-                               </div>
-                             ))}
-                          </div>
-                          {analysis.insights?.length > 0 && (
-                            <div style={{ marginTop: "8px", paddingTop: "6px", borderTop: "1px dashed #ddd" }}>
-                               <div style={{ fontSize: "8px", fontWeight: 700, color: "#666", textTransform: "uppercase", marginBottom: "4px" }}>Insights</div>
-                               <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "4px" }}>
-                                  {analysis.insights.map((ins: any, ii: number) => (
-                                    <div key={ii} style={{ fontSize: "9px" }}>
-                                       <span style={{ fontWeight: 700, color: "#333" }}>{ins.title}: </span>
-                                       <span style={{ color: "#666" }}>{ins.content}</span>
-                                    </div>
-                                  ))}
-                               </div>
-                            </div>
-                          )}
-                       </div>
-                     );
-                   })()
-                )}
-
-                {printConfig.notes && notes[item.id] && (
-                  <div style={{ fontSize: "10px", color: "#E62B1E", fontStyle: "italic", marginTop: "4px", padding: "4px 8px", background: "#fdf2f2", borderRadius: "4px", borderLeft: "2px solid #E62B1E" }}>
-                    Note: {notes[item.id]}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-        <div style={{ marginTop: "16px", paddingTop: "8px", borderTop: "1px solid #eee", display: "flex", justifyContent: "space-between", fontSize: "8px", color: "#bbb" }}>
-          <span>{data?.title}</span><span>TEDMaster · AI-Powered English Learning</span>
-        </div>
-      </div>
+      <PrintView
+        data={data}
+        printConfig={printConfig}
+        vocabWords={vocabWords}
+        analysisData={analysisData}
+        savedSentences={savedSentences}
+        notes={notes}
+      />
 
       {showPrintModal && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }} onClick={() => setShowPrintModal(false)}>
-           <div className="w-full max-w-sm rounded-3xl shadow-2xl p-7" style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }} onClick={e => e.stopPropagation()}>
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: "var(--accent-s)" }}>
-                   <Download size={20} style={{ color: "var(--accent)" }} />
-                </div>
-                <div>
-                   <h3 className="text-xl font-bold">{t.exportConfig}</h3>
-                   <p className="text-[11px] opacity-40">Customize your learning PDF</p>
-                </div>
-              </div>
-              
-              <div className="space-y-3">
-                 {[
-                   { id: "vocab", label: t.includeVocab, count: vocabWords.length, icon: <Book size={14} /> },
-                   { id: "script", label: t.includeScript, count: data?.transcript.length, icon: <FileText size={14} /> },
-                   { id: "analysis", label: t.includeAnalysis, count: Object.keys(analysisData).length || savedSentences.length, icon: <Sparkles size={14} /> },
-                   { id: "notes", label: t.includeNotes, count: Object.values(notes).filter(Boolean).length, icon: <FileEdit size={14} /> }
-                 ].map(opt => (
-                   <label key={opt.id} className="flex items-center justify-between p-4 rounded-2xl cursor-pointer transition-all border border-transparent hover:border-accent/20"
-                     style={{ background: "var(--bg-3)" }}>
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-white/5 opacity-60">{opt.icon}</div>
-                        <span className="text-sm font-semibold">{opt.label}</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                         <span className="text-[10px] font-mono opacity-30">{opt.count}</span>
-                         <input type="checkbox" checked={(printConfig as any)[opt.id]} onChange={e => setPrintConfig(prev => ({ ...prev, [opt.id]: e.target.checked }))} 
-                           className="w-5 h-5 rounded-lg appearance-none cursor-pointer transition-all border-2" 
-                           style={{ 
-                             accentColor: "var(--accent)", 
-                             borderColor: (printConfig as any)[opt.id] ? "var(--accent)" : "rgba(255,255,255,0.1)",
-                             background: (printConfig as any)[opt.id] ? "var(--accent)" : "transparent"
-                           }} />
-                      </div>
-                   </label>
-                 ))}
-              </div>
-
-              <div className="flex gap-4 mt-8">
-                <button onClick={() => setShowPrintModal(false)} className="flex-1 py-3 rounded-2xl text-sm font-bold transition-all hover:bg-white/5" style={{ color: "var(--text-3)" }}>{t.close}</button>
-                <button onClick={async () => { 
-                   if (! (await deductPoints("PDF_EXPORT")) ) return;
-                   setShowPrintModal(false); setTimeout(() => window.print(), 100); 
-                }} 
-                   className="flex-[2] py-3 rounded-2xl text-sm font-black text-white shadow-xl transition-all hover:-translate-y-0.5 active:translate-y-0"
-                   style={{ background: "var(--accent)", boxShadow: "0 10px 25px -5px rgba(230,43,30,0.4)" }}>
-                   {t.confirmPrint}
-                </button>
-              </div>
-           </div>
-        </div>
+        <PrintConfigModal
+          printConfig={printConfig}
+          onChange={setPrintConfig}
+          onClose={() => setShowPrintModal(false)}
+          onConfirm={async () => {
+            if (!(await deductPoints("PDF_EXPORT"))) return;
+            setShowPrintModal(false);
+            setTimeout(() => window.print(), 100);
+          }}
+          vocabWords={vocabWords}
+          data={data}
+          analysisData={analysisData}
+          savedSentences={savedSentences}
+          notes={notes}
+        />
       )}
 
       {/* ── Header ─────────────────────────────────────────────── */}
-      <header className="h-14 flex items-center gap-3 px-4 border-b shrink-0 print-hidden"
+      <header className="h-14 flex items-center gap-2 px-4 border-b shrink-0 print-hidden"
         style={{ background: "var(--bg-2)", borderColor: "var(--border)" }}>
-        <Link href="/" className="p-2 rounded-lg transition-colors"
+
+        {/* Home */}
+        <Link href="/" className="p-2 rounded-lg transition-colors shrink-0"
           style={{ color: "var(--text-2)" }}
           onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
           onMouseLeave={e => (e.currentTarget.style.color = "var(--text-2)")}>
-          <Home size={20} />
+          <Home size={18} />
         </Link>
-        <h1 className="flex-1 text-sm font-semibold truncate" style={{ color: "var(--text)" }}>{data?.title}</h1>
-        <HeaderControls />
-        <div className="w-px h-6 mx-1" style={{ background: "var(--border)" }} />
-        
-        {/* History Dropdown */}
-        <div className="relative">
-          <button onClick={() => setShowHistory(v => !v)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
-            style={{ background: showHistory ? "var(--bg-3)" : "transparent", color: "var(--text-2)" }}
-            onMouseEnter={e => !showHistory && (e.currentTarget.style.color = "var(--text)")}
-            onMouseLeave={e => !showHistory && (e.currentTarget.style.color = "var(--text-2)")}>
-            <HistoryIcon size={16} />{t.history}
+
+        {/* Title */}
+        <div className="flex-1 min-w-0">
+          <h1 className="text-sm font-semibold truncate leading-tight" style={{ color: "var(--text)" }}>{data?.title}</h1>
+          {data?.presenter && <p className="text-[11px] truncate leading-tight" style={{ color: "var(--text-3)" }}>{t.by} {data.presenter}</p>}
+        </div>
+
+        {/* Knowledge Hub — primary action, always visible */}
+        <button onClick={() => setShowVocab(v => !v)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all shrink-0"
+          style={{ background: showVocab ? "var(--accent)" : "var(--bg-3)", color: showVocab ? "#fff" : "var(--text-2)" }}>
+          <BookMarked size={15} /><span className="hidden sm:inline">{t.vocab}</span>
+          {vocabWords.length > 0 && (
+            <span className="text-xs px-1.5 py-0.5 rounded-full"
+              style={{ background: showVocab ? "rgba(255,255,255,0.25)" : "var(--accent-s)", color: showVocab ? "#fff" : "var(--accent)" }}>
+              {vocabWords.length}
+            </span>
+          )}
+        </button>
+
+        {/* ⋯ More menu */}
+        <div className="relative shrink-0">
+          <button onClick={() => setShowMoreMenu(v => !v)}
+            className="p-2 rounded-lg transition-colors"
+            style={{ background: showMoreMenu ? "var(--bg-3)" : "transparent", color: showMoreMenu ? "var(--text)" : "var(--text-2)" }}>
+            <MoreHorizontal size={18} />
           </button>
-          
-          {showHistory && (
-             <div className="absolute top-full right-0 mt-2 w-72 rounded-2xl shadow-2xl z-[110] py-2 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
-               style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}>
-               <div className="px-4 py-2 border-b border-white/5 mb-1">
-                  <p className="text-[10px] font-black uppercase tracking-widest opacity-30">{t.history}</p>
-               </div>
-               <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
-                  {historyItems.length === 0 ? (
-                    <div className="px-4 py-8 text-center opacity-30 text-xs">No recent history</div>
-                  ) : (
-                    historyItems.map((h, i) => (
-                      <button key={h.id} 
-                        onClick={() => {
-                          setShowHistory(false);
-                          router.push(`/watch?url=${encodeURIComponent(h.videoUrl)}&t=${Math.floor(h.progressTime)}`);
-                        }}
-                        className="w-full px-4 py-3 flex flex-col gap-1 text-left transition-colors hover:bg-white/5 border-b last:border-0 border-white/5 group"
-                        style={{ opacity: h.videoUrl === videoUrlParam ? 0.5 : 1 }}>
-                        <h4 className="text-[13px] font-bold line-clamp-1 group-hover:text-accent transition-colors">{h.title}</h4>
-                        <div className="flex items-center justify-between text-[10px] opacity-40">
-                           <span>{h.presenter}</span>
-                           <span>{Math.floor(h.progressTime / 60)}:{(Math.floor(h.progressTime % 60)).toString().padStart(2,'0')}</span>
-                        </div>
-                        {h.duration && (
-                          <div className="w-full h-0.5 bg-white/5 rounded-full overflow-hidden mt-1">
-                             <div className="h-full bg-accent/40" style={{ width: `${(h.progressTime / h.duration) * 100}%` }} />
-                          </div>
-                        )}
-                      </button>
-                    ))
-                  )}
-               </div>
-             </div>
+
+          {showMoreMenu && (
+            <>
+              {/* Backdrop */}
+              <div className="fixed inset-0 z-[109]" onClick={() => setShowMoreMenu(false)} />
+              <div className="absolute top-full right-0 mt-2 w-64 rounded-2xl shadow-2xl z-[110] py-2 overflow-hidden"
+                style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}>
+
+                {/* Export group */}
+                <div className="px-3 pt-1 pb-0.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider px-1 mb-1" style={{ color: "var(--text-3)" }}>{t.exportLabel}</p>
+                  {[
+                    { icon: <Video size={14} />, label: t.downloadVideo, action: () => { if (data?.downloadUrl) { const a = document.createElement("a"); a.href = data.downloadUrl; a.download = `${data.title}.mp4`; a.target = "_blank"; a.click(); } setShowMoreMenu(false); }, disabled: !data?.downloadUrl },
+                    { icon: <FileText size={14} />, label: t.exportPdf, action: () => { setShowMoreMenu(false); setShowPrintModal(true); } },
+                    { icon: <FileCode size={14} />, label: t.exportSrt, action: () => { exportSRT(); setShowMoreMenu(false); } },
+                  ].map((item, i) => (
+                    <button key={i} onClick={item.disabled ? undefined : item.action} disabled={!!item.disabled}
+                      className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm text-left transition-colors disabled:opacity-30"
+                      style={{ color: "var(--text)" }}
+                      onMouseEnter={e => !item.disabled && (e.currentTarget.style.background = "var(--bg-3)")}
+                      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                      <span style={{ color: "var(--accent)" }}>{item.icon}</span>{item.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="my-1.5 mx-3 h-px" style={{ background: "var(--border)" }} />
+
+                {/* History */}
+                <div className="px-3">
+                  <button onClick={() => { setShowMoreMenu(false); setShowHistory(true); }}
+                    className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm text-left transition-colors"
+                    style={{ color: "var(--text)" }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "var(--bg-3)")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                    <HistoryIcon size={14} style={{ color: "var(--accent)" }} />{t.history}
+                  </button>
+                </div>
+
+                <div className="my-1.5 mx-3 h-px" style={{ background: "var(--border)" }} />
+
+                {/* Preferences */}
+                <div className="px-3 pb-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wider px-1 mb-1" style={{ color: "var(--text-3)" }}>{t.settings}</p>
+
+                  {/* Theme toggle */}
+                  <button onClick={toggleTheme}
+                    className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm transition-colors"
+                    style={{ color: "var(--text)" }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "var(--bg-3)")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                    {theme === "dark" ? <Sun size={14} style={{ color: "var(--accent)" }} /> : <Moon size={14} style={{ color: "var(--accent)" }} />}
+                    {theme === "dark" ? (lang === "en" ? "Light Mode" : "浅色模式") : (lang === "en" ? "Dark Mode" : "深色模式")}
+                  </button>
+
+                  {/* App language */}
+                  <div className="px-2 py-1.5">
+                    <p className="text-xs mb-1.5 flex items-center gap-1.5" style={{ color: "var(--text-2)" }}>
+                      <Globe size={13} style={{ color: "var(--accent)" }} />{lang === "en" ? "Language" : "界面语言"}
+                    </p>
+                    <div className="grid grid-cols-4 gap-1">
+                      {LANGS.map(l => (
+                        <button key={l.value} onClick={() => setLang(l.value)}
+                          className="py-1 rounded text-[11px] font-medium transition-all"
+                          style={{
+                            background: lang === l.value ? "var(--accent-s)" : "var(--bg)",
+                            color: lang === l.value ? "var(--accent)" : "var(--text-2)",
+                            border: `1px solid ${lang === l.value ? "var(--accent)" : "var(--border)"}`,
+                          }}>
+                          {l.short}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* GitHub */}
+                  <a href="https://github.com/TrojanFish/TedMater" target="_blank" rel="noopener noreferrer"
+                    className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm transition-colors"
+                    style={{ color: "var(--text)", display: "flex" }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "var(--bg-3)")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                    <span style={{ color: "var(--accent)" }}><GithubIcon /></span>GitHub
+                  </a>
+                </div>
+              </div>
+            </>
           )}
         </div>
 
-        {/* Vocab */}
-        <button onClick={() => setShowVocab(v => !v)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
-          style={{ background: showVocab ? "var(--accent)" : "var(--bg-3)", color: showVocab ? "#fff" : "var(--text-2)" }}>
-          <BookMarked size={15} />{t.vocab}
-          {vocabWords.length > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: showVocab ? "rgba(255,255,255,0.25)" : "var(--accent-s)", color: showVocab ? "#fff" : "var(--accent)" }}>{vocabWords.length}</span>}
-        </button>
-        {/* Export */}
-        <div className="relative">
-          <button onClick={() => setShowExportMenu(v => !v)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
-            style={{ background: showExportMenu ? "var(--accent)" : "var(--bg-3)", color: showExportMenu ? "#fff" : "var(--text-2)" }}>
-            <Download size={15} />{t.exportLabel}
-          </button>
-          {showExportMenu && (
-            <div className="absolute top-full right-0 mt-2 w-56 rounded-xl shadow-xl z-[102] py-1"
-              style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}>
-              {[
-                { icon: <Video size={15} />, label: t.downloadVideo, action: () => { if (data?.downloadUrl) { const a = document.createElement("a"); a.href = data.downloadUrl; a.download = `${data.title}.mp4`; a.target = "_blank"; a.click(); } setShowExportMenu(false); }, disabled: !data?.downloadUrl },
-                { icon: <FileText size={15} />, label: t.exportPdf, action: () => { setShowExportMenu(false); setShowPrintModal(true); }, disabled: false },
-                { icon: <FileCode size={15} />, label: t.exportSrt, action: exportSRT, disabled: false },
-              ].map((item, i) => (
-                <button key={i} onClick={item.disabled ? undefined : item.action} disabled={item.disabled}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors disabled:opacity-30"
-                  style={{ color: "var(--text)" }}
-                  onMouseEnter={e => !item.disabled && (e.currentTarget.style.background = "var(--bg-3)")}
-                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                  <span style={{ color: "var(--accent)" }}>{item.icon}</span>{item.label}
-                  {!item.disabled && <Check size={13} className="ml-auto" style={{ color: "var(--text-3)" }} />}
-                </button>
-              ))}
+        {/* Account pill */}
+        {user ? (
+          <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl shrink-0"
+            style={{ background: "var(--bg-3)", border: "1px solid var(--border)" }}>
+            <div className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold text-white"
+              style={{ background: "var(--accent)" }}>
+              {user.email[0].toUpperCase()}
             </div>
-          )}
-        </div>
-        {/* User / Credits */}
-        <div className="flex items-center gap-3 ml-2">
-           {user ? (
-             <div className="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-white/5 border border-white/5">
-                <div className="w-5 h-5 rounded-lg bg-accent flex items-center justify-center text-[10px] font-bold text-white shadow-lg shadow-accent/20">
-                   {user.email[0].toUpperCase()}
-                </div>
-                <div className="flex flex-col">
-                   <span className="text-[10px] font-black leading-none">{user.credits} PTS</span>
-                   <span className="text-[8px] opacity-40 uppercase tracking-widest">{t.balance || 'Credits'}</span>
-                </div>
-               <button onClick={() => { fetch("/api/auth/logout"); setUser(null); }} className="ml-2 opacity-30 hover:opacity-100 transition-opacity"><LogOut size={12} /></button>
-             </div>
-           ) : (
-             <button onClick={() => setShowAuth(true)} className="px-4 py-1.5 rounded-xl bg-accent text-white text-xs font-bold shadow-xl shadow-accent/20 hover:scale-105 active:scale-95 transition-all">
-                {t.login || "Sign In"}
-             </button>
-           )}
-        </div>
+            <span className="text-[11px] font-bold" style={{ color: "var(--text)" }}>{user.credits} <span style={{ color: "var(--text-3)" }}>pts</span></span>
+            <button onClick={() => { fetch("/api/auth/logout"); setUser(null); }}
+              className="transition-opacity opacity-30 hover:opacity-80"
+              title={t.logout}>
+              <LogOut size={12} style={{ color: "var(--text)" }} />
+            </button>
+          </div>
+        ) : (
+          <button onClick={() => setShowAuth(true)}
+            className="px-3 py-1.5 rounded-lg text-xs font-bold text-white shrink-0 transition-all hover:opacity-90 active:scale-95"
+            style={{ background: "var(--accent)" }}>
+            {t.login}
+          </button>
+        )}
       </header>
       
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} onSuccess={(u) => setUser(u)} />}
+
+      {/* ── History Modal ────────────────────────────────────────── */}
+      {showHistory && (
+        <HistoryModal
+          historyItems={historyItems}
+          currentUrl={videoUrlParam ?? ""}
+          onClose={() => setShowHistory(false)}
+          onSelect={(url, time) => { setShowHistory(false); router.push(`/watch?url=${encodeURIComponent(url)}&t=${time}`); }}
+        />
+      )}
 
       {/* Login Barrier for Watch Page - Absolute Cover */}
       {!user && !loading && (
@@ -682,7 +1021,7 @@ function WatchContent() {
               </div>
               <div className="space-y-3">
                 <h2 className="text-4xl font-black tracking-tight">{t.login || 'Unlocked Growth'}</h2>
-                <p className="text-sm opacity-60 leading-relaxed font-medium">Join 50k+ learners mastering English with TEDMaster. Create your free account to unlock analysis and shadow practicing.</p>
+                <p className="text-sm opacity-60 leading-relaxed font-medium">Create a free account to unlock AI analysis, vocabulary building, and shadowing practice.</p>
               </div>
               <div className="flex flex-col gap-3">
                 <button 
@@ -703,9 +1042,11 @@ function WatchContent() {
       {/* ── Main layout ────────────────────────────────────────── */}
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden print-hidden">
 
-        {/* Notebook overlay */}
+        {/* Notebook overlay — full-height right drawer with backdrop */}
         {showVocab && (
-          <div className="absolute top-14 right-0 w-80 bottom-0 z-50 p-3">
+          <div className="absolute inset-0 z-50 flex justify-end">
+            <div className="absolute inset-0 bg-black/30" onClick={() => setShowVocab(false)} />
+          <div className="relative w-[420px] max-w-[90vw] h-full flex flex-col p-3" style={{ background: "var(--bg)", borderLeft: "1px solid var(--border)" }}>
             <LearningNotebook 
               words={vocabWords}
               sentences={savedSentences}
@@ -735,6 +1076,7 @@ function WatchContent() {
                 if (item && videoRef.current) { videoRef.current.currentTime = (item.startTime - subtitleOffset) / 1000; videoRef.current.play(); setIsPlaying(true); }
               }}
             />
+          </div>
           </div>
         )}
 
@@ -775,11 +1117,26 @@ function WatchContent() {
           {/* Controls */}
           <div className="shrink-0 px-4 pb-4 pt-3 relative z-30" style={{ background: "rgba(0,0,0,0.85)" }}>
             {/* Progress bar */}
-            <div className="relative h-5 flex items-center mb-3 group/seek">
+            <div className="relative h-6 flex items-center mb-2 group/seek cursor-pointer"
+              onMouseMove={e => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                const el = e.currentTarget.querySelector<HTMLElement>("[data-tooltip]");
+                if (el && duration > 0) {
+                  el.style.left = `${pct * 100}%`;
+                  el.textContent = formatTime(pct * duration);
+                }
+              }}
+            >
               <div className="absolute inset-y-0 left-0 right-0 flex items-center">
-                <div className="w-full h-1 rounded-full" style={{ background: "rgba(255,255,255,0.15)" }}>
+                <div className="w-full h-1 group-hover/seek:h-2 rounded-full transition-all duration-150" style={{ background: "rgba(255,255,255,0.15)" }}>
                   <div className="h-full rounded-full" style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%`, background: "var(--accent)" }} />
                 </div>
+              </div>
+              {/* Hover time tooltip */}
+              <div data-tooltip className="absolute -top-7 -translate-x-1/2 px-1.5 py-0.5 rounded text-xs font-mono pointer-events-none opacity-0 group-hover/seek:opacity-100 transition-opacity"
+                style={{ background: "rgba(0,0,0,0.8)", color: "#fff", whiteSpace: "nowrap" }}>
+                {formatTime(currentTime)}
               </div>
               <input type="range" min={0} max={duration || 100} value={currentTime}
                 onChange={e => { const v = Number(e.target.value); if (videoRef.current) videoRef.current.currentTime = (v - subtitleOffset) / 1000; setCurrentTime(v); }}
@@ -866,6 +1223,30 @@ function WatchContent() {
                         <input type="range" min={-5000} max={5000} step={100} value={subtitleOffset} onChange={e => setSubtitleOffset(Number(e.target.value))} className="w-full" />
                       </div>
 
+                      {/* Subtitle Language */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs" style={{ color: "var(--text-2)" }}>
+                          <span className="font-medium">{t.subtitleLangLabel}</span>
+                          {isLoadingSubtitles && <Loader2 size={10} className="animate-spin" style={{ color: "var(--accent)" }} />}
+                        </div>
+                        <div className="grid grid-cols-3 gap-1">
+                          {SUBTITLE_LANGS.map(l => (
+                            <button key={l.value}
+                              onClick={() => handleSubtitleLangChange(l.value)}
+                              disabled={isLoadingSubtitles}
+                              className="px-2 py-1 rounded text-[11px] font-medium transition-all"
+                              style={{
+                                background: subtitleLang === l.value ? "var(--accent-s)" : "var(--bg-3)",
+                                color: subtitleLang === l.value ? "var(--accent)" : "var(--text-2)",
+                                border: `1px solid ${subtitleLang === l.value ? "var(--accent)" : "var(--border)"}`,
+                                opacity: isLoadingSubtitles ? 0.5 : 1,
+                              }}>
+                              {l.short}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
                       {/* Color Settings */}
                       <div className="grid grid-cols-2 gap-4">
                          <div>
@@ -900,13 +1281,64 @@ function WatchContent() {
           <div className="px-4 py-3 border-b shrink-0 flex items-center gap-2" style={{ borderColor: "var(--border)", background: "var(--bg-2)" }}>
             <div className="w-1 h-4 rounded-full" style={{ background: "var(--accent)" }} />
             <span className="text-sm font-bold">{t.transcript}</span>
+            {data?.needsTranscription && !isTranscribing && (
+              <button 
+                onClick={handleTranscribe}
+                className="ml-3 text-[10px] px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 transition-all font-bold flex items-center gap-1 border border-indigo-500/20"
+              >
+                <Sparkles size={10} /> {t.aiTranscribe}
+              </button>
+            )}
+            {isTranscribing && (
+              <div className="ml-3 flex items-center gap-2 px-2 py-0.5 rounded-lg bg-indigo-500/5 border border-indigo-500/10">
+                <Loader2 size={10} className="animate-spin text-indigo-500" />
+                <span className="text-[10px] font-bold text-indigo-500 animate-pulse">{transcribeStatus || t.aiTranscribing}</span>
+              </div>
+            )}
             <span className="ml-auto text-xs" style={{ color: "var(--text-3)" }}>{data?.transcript?.length ?? 0}</span>
           </div>
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-1">
-            {data?.transcript?.map((item, idx) => {
+          <div ref={transcriptScrollRef} className="flex-1 overflow-y-auto custom-scrollbar p-3">
+            {/* AI Translate banner — shown when TED has no official translation for the selected language */}
+            {data?.isTranslationMissing && subtitleLang !== "en" && (
+              <div className="rounded-xl p-3 mb-2 flex items-center gap-3"
+                style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}>
+                <Sparkles size={14} style={{ color: "var(--accent)", flexShrink: 0 }} />
+                <p className="flex-1 text-xs leading-snug" style={{ color: "var(--text-2)" }}>
+                  {lang === "en"
+                    ? `No official translation available for this language.`
+                    : `此视频暂无该语言的官方译文。`}
+                </p>
+                {user ? (
+                  <button onClick={handleAiTranslate} disabled={isAiTranslating}
+                    className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                    style={{
+                      background: isAiTranslating ? "var(--bg-3)" : "var(--accent-s)",
+                      color: isAiTranslating ? "var(--text-3)" : "var(--accent)",
+                      border: "1px solid var(--accent)",
+                      opacity: isAiTranslating ? 0.7 : 1,
+                    }}>
+                    {isAiTranslating
+                      ? <><Loader2 size={11} className="animate-spin" />{t.aiTranslating}</>
+                      : <><Sparkles size={11} />{t.aiTranslate} · {AI_TRANSLATE_COST} pts</>}
+                  </button>
+                ) : (
+                  <span className="text-xs" style={{ color: "var(--text-3)" }}>
+                    {lang === "en" ? "Login to translate" : "登录后可翻译"}
+                  </span>
+                )}
+              </div>
+            )}
+            <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}>
+            {rowVirtualizer.getVirtualItems().map(vRow => {
+              const idx = vRow.index;
+              const item = data!.transcript[idx];
               const isActive = activeIndex === idx;
               return (
-                <div key={item.id} ref={isActive ? activeParagraphRef : null}
+                <div key={item.id}
+                  data-index={idx}
+                  ref={rowVirtualizer.measureElement}
+                  style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vRow.start}px)`, paddingBottom: "4px" }}>
+                <div
                   onClick={() => { if (!hasInteracted) setHasInteracted(true); if (videoRef.current) { videoRef.current.currentTime = (item.startTime - subtitleOffset) / 1000; videoRef.current.play(); } }}
                   className="rounded-xl p-3 cursor-pointer transition-all group/item"
                   style={{
@@ -926,17 +1358,19 @@ function WatchContent() {
                             e.stopPropagation();
                             const clean = w.replace(/[^a-zA-Z'-]/g, "");
                             if (!clean) return;
-                            if (! (await deductPoints("WORD_LOOKUP")) ) return;
                             (async () => {
                               videoRef.current?.pause(); setIsPlaying(false);
+                              // Cancel previous in-flight lookup
+                              wordAbortRef.current?.abort();
+                              wordAbortRef.current = new AbortController();
                               setWordLoading(true);
                               setActiveWord({ word: clean, loading: true } as VocabItem & { loading: boolean });
                               try {
-                                const r = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "define", text: clean, context: item.english }) });
+                                const r = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "define", text: clean, context: item.english }), signal: wordAbortRef.current.signal });
                                 const result = await r.json();
                                 if (!r.ok) throw new Error(result.error);
                                 setActiveWord(result);
-                              } catch { setActiveWord(null); }
+                              } catch (err: any) { if (err.name !== "AbortError") setActiveWord(null); }
                               finally { setWordLoading(false); }
                             })();
                           }}
@@ -955,9 +1389,9 @@ function WatchContent() {
 
                   {/* Action row */}
                   <div className="flex items-center gap-2 mt-2 pl-8 opacity-0 group-hover/item:opacity-100 transition-opacity">
-                    <button onClick={e => { e.stopPropagation(); handleDeepAnalyze(item); }}
+                    <button onClick={e => { e.stopPropagation(); analysisPanelId === item.id ? setAnalysisPanelId(null) : handleDeepAnalyze(item); }}
                       className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all"
-                      style={{ background: analysisData[item.id] ? "var(--accent)" : "var(--bg-3)", color: analysisData[item.id] ? "#fff" : "var(--text-2)" }}>
+                      style={{ background: analysisPanelId === item.id ? "var(--accent)" : analysisData[item.id] ? "var(--accent-s)" : "var(--bg-3)", color: analysisPanelId === item.id ? "#fff" : analysisData[item.id] ? "var(--accent)" : "var(--text-2)" }}>
                       {analysisLoading === item.id ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
                       {t.analyzeBtn}
                     </button>
@@ -1003,147 +1437,34 @@ function WatchContent() {
                     </div>
                   )}
 
-                  {/* Analysis panel */}
-                  {analysisData[item.id] && (
-                    <div className="mt-3 ml-8 p-4 rounded-xl space-y-4" style={{ background: "var(--bg-3)", border: "1px solid var(--border)" }}>
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--accent)" }}>{t.structure}</p>
-                        <p className="text-xs leading-relaxed" style={{ color: "var(--text)" }}>{analysisData[item.id].structureZh}</p>
-                      </div>
-                      <div className="space-y-2">
-                        {analysisData[item.id].breakdown?.map((p, i) => (
-                          <div key={i} className="grid grid-cols-[120px_1fr] gap-3 text-[11px] leading-relaxed items-start">
-                            <span className="font-mono text-right font-bold pt-0.5" style={{ color: "var(--accent)" }}>{p.label}</span>
-                            <div className="flex-1">
-                              <span className="font-semibold" style={{ color: "var(--text)" }}>{p.content}</span>
-                              {p.explanation && <span className="ml-2" style={{ color: "var(--text-2)" }}>{p.explanation}</span>}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                        <div className="pt-3 border-t flex items-center justify-between" style={{ borderColor: "var(--border)" }}>
-                          <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--accent)" }}>{t.insights}</p>
-                          <button onClick={e => { e.stopPropagation(); saveSentence(item, analysisData[item.id]); }}
-                             className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold text-white transition-all"
-                             style={{ background: savedSentences.some(s => s.id === item.id) ? "var(--text-3)" : "var(--accent)" }}>
-                             <BookMarked size={11} />
-                             {savedSentences.some(s => s.id === item.id) ? "SAVED" : t.saveSentence}
-                          </button>
-                        </div>
-                        <div className="space-y-2">
-                          {analysisData[item.id].insights.map((ins, i) => (
-                            <div key={i} className="text-xs space-y-0.5">
-                              <p className="font-semibold" style={{ color: "var(--text)" }}>{ins.title}</p>
-                              <p style={{ color: "var(--text-2)" }}>{ins.content}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </div>
+                </div>
                 );
               })}
+            </div>
           </div>
         </section>
+
+        {/* ── AI Analysis panel (3rd column) ───────────────────── */}
+        {analysisPanelId !== null && analysisData[analysisPanelId] && (
+          <AIAnalysisPanel
+            analysis={analysisData[analysisPanelId]}
+            sentence={data?.transcript.find(i => i.id === analysisPanelId)}
+            savedSentences={savedSentences}
+            onClose={() => setAnalysisPanelId(null)}
+            onSave={saveSentence}
+          />
+        )}
       </main>
 
       {/* ── Word modal ─────────────────────────────────────────── */}
       {activeWord && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 print-hidden"
-          style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)" }}
-          onClick={() => setActiveWord(null)}>
-          <div className="w-full max-w-xl max-h-[88vh] flex flex-col rounded-2xl shadow-2xl overflow-hidden"
-            style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}
-            onClick={e => e.stopPropagation()}>
-
-            {wordLoading ? (
-              <div className="flex flex-col items-center justify-center gap-3 py-16">
-                <Loader2 size={28} className="animate-spin" style={{ color: "var(--accent)" }} />
-                <p className="text-sm" style={{ color: "var(--text-2)" }}>{t.loading}</p>
-              </div>
-            ) : (
-              <>
-                {/* Modal header */}
-                <div className="flex items-start justify-between p-6 pb-4 border-b" style={{ borderColor: "var(--border)" }}>
-                  <div>
-                    <h2 className="text-3xl font-black tracking-tight">{activeWord.word?.replace(/[^a-zA-Z'-]/g, "")}</h2>
-                    <div className="flex items-center gap-3 mt-2">
-                      <span className="text-xs px-2 py-0.5 rounded font-bold" style={{ background: "var(--accent-s)", color: "var(--accent)" }}>{activeWord.partOfSpeech}</span>
-                      <span className="text-sm font-mono" style={{ color: "var(--text-2)" }}>{activeWord.phonetic}</span>
-                      <button onClick={() => { const u = new SpeechSynthesisUtterance(activeWord.word); u.lang = "en-US"; u.rate = 0.85; speechSynthesis.speak(u); }}
-                        className="p-1 rounded transition-colors" style={{ color: "var(--text-3)" }}
-                        onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
-                        onMouseLeave={e => (e.currentTarget.style.color = "var(--text-3)")}>
-                        <Volume2 size={15} />
-                      </button>
-                    </div>
-                  </div>
-                  <button onClick={() => setActiveWord(null)} className="p-1.5 rounded-lg transition-colors" style={{ color: "var(--text-3)" }}
-                    onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
-                    onMouseLeave={e => (e.currentTarget.style.color = "var(--text-3)")}>
-                    <X size={18} />
-                  </button>
-                </div>
-
-                {/* Modal body */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-5">
-                  {/* Meaning */}
-                  <div className="p-4 rounded-xl" style={{ background: "var(--bg-3)" }}>
-                    <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--accent)" }}>{t.meaning}</p>
-                    <p className="text-xl font-bold leading-snug">{activeWord.definitionZh}</p>
-                    {activeWord.tense && <p className="text-xs mt-2 px-2 py-1 rounded inline-block" style={{ background: "var(--accent-s)", color: "var(--accent)" }}>{activeWord.tense}</p>}
-                  </div>
-
-                  {/* Synonyms / Antonyms */}
-                  <div className="grid grid-cols-2 gap-3">
-                    {[{ label: t.synonyms, items: activeWord.synonyms }, { label: t.antonyms, items: activeWord.antonyms }].map(({ label, items }) => items?.length ? (
-                      <div key={label} className="p-3 rounded-xl" style={{ background: "var(--bg-3)" }}>
-                        <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-2)" }}>{label}</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {items.map((s: string, i: number) => (
-                            <span key={i} className="text-xs px-2 py-0.5 rounded-full border" style={{ color: "var(--text-2)", borderColor: "var(--border)" }}>{s}</span>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null)}
-                  </div>
-
-                  {/* Collocations */}
-                  {activeWord.phrases?.length ? (
-                    <div className="p-3 rounded-xl" style={{ background: "var(--bg-3)" }}>
-                      <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-2)" }}>{t.collocations}</p>
-                      <div className="space-y-1">
-                        {activeWord.phrases.map((p: string, i: number) => (
-                          <p key={i} className="text-sm border-l-2 pl-3 py-0.5" style={{ color: "var(--text)", borderColor: "var(--accent)" }}>{p}</p>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {/* Example */}
-                  {activeWord.exampleEn && (
-                    <div className="p-3 rounded-xl" style={{ background: "var(--bg-3)" }}>
-                      <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-2)" }}>{t.example}</p>
-                      <p className="text-sm leading-relaxed" style={{ color: "var(--text)" }}>"{activeWord.exampleEn}"</p>
-                      {activeWord.exampleZh && <p className="text-xs mt-1 leading-relaxed" style={{ color: "var(--text-2)" }}>"{activeWord.exampleZh}"</p>}
-                    </div>
-                  )}
-                </div>
-
-                {/* Save button */}
-                <div className="p-4 border-t" style={{ borderColor: "var(--border)" }}>
-                  <button onClick={() => saveToVocab(activeWord as VocabItem)}
-                    className="w-full py-3 rounded-xl font-bold text-white transition-all"
-                    style={{ background: "var(--accent)" }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "var(--accent-h)")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "var(--accent)")}>
-                    <BookMarked size={16} className="inline mr-2" />{t.saveWord}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+        <WordLookupModal
+          activeWord={activeWord}
+          wordLoading={wordLoading}
+          onClose={() => setActiveWord(null)}
+          onSave={saveToVocab}
+        />
       )}
 
     </div>

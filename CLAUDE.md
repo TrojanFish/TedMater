@@ -13,40 +13,35 @@ npm run lint      # ESLint
 
 ## Environment
 
-Copy `.env.example` → `.env.local` and set:
+Copy `.env.example` → `.env.local` and fill in all values:
+
 ```
-GEMINI_API_KEY=your_key_here
+GEMINI_API_KEY=your_gemini_api_key_here
+JWT_SECRET=a_long_random_secret_string
+DATABASE_URL=postgresql://tedmaster:yourpassword@localhost:5432/tedmaster?connection_limit=10&pool_timeout=30
+POSTGRES_PASSWORD=yourpassword   # only needed for docker-compose
 ```
+
+> For local dev without Docker, run a local Postgres instance and set `DATABASE_URL` accordingly.
+> After changing `DATABASE_URL`, run `npx prisma migrate dev` to apply schema.
 
 ## Deployment (VPS / Docker)
 
+See `DEPLOY.md` for the full step-by-step VPS deployment guide.
+
+Quick reference:
 ```bash
-# Build and run
-docker compose up -d --build
+# First deploy (or after schema changes)
+docker compose run --rm migrate
+
+# Start / restart app
+docker compose up -d --build tedmaster
 
 # View logs
-docker compose logs -f
+docker compose logs -f tedmaster
 
-# Update (pull new code, rebuild)
-git pull && docker compose up -d --build
-```
-
-Requires `.env.local` (or pass `GEMINI_API_KEY` via environment) on the VPS before running.
-
-Nginx reverse-proxy example (if using Nginx in front of port 3000):
-```nginx
-server {
-    listen 80;
-    server_name yourdomain.com;
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
+# Update (pull new code, rebuild, migrate, restart)
+git pull && docker compose build && docker compose run --rm migrate && docker compose up -d tedmaster
 ```
 
 ## Architecture
@@ -56,32 +51,67 @@ server {
 ### Data Flow
 
 1. User submits a TED URL on `/` → calls `/api/parse`
-2. `/api/parse` scrapes TED's `__NEXT_DATA__` JSON, extracts video streams + bilingual subtitles
-3. `/watch` renders the player with transcript
-4. Word click / sentence analysis → `/api/ai` (Gemini 2.0 Flash)
+2. `/api/parse` checks an in-process LRU cache; on miss, scrapes TED's `__NEXT_DATA__` JSON, extracts video streams + bilingual subtitles, writes to cache
+3. `/watch` renders the HLS/MP4 player with virtual-scrolled transcript
+4. Word click → `/api/ai` (action `define`) — checked against AI response cache first
+5. Sentence analysis → `/api/ai` (action `analyze`) — also cached
+6. HLS streams: master/sub-playlists proxied through `/api/proxy-m3u8`; segments served **directly from TED CDN** (no server bandwidth used)
 
 ### API Routes
 
 | Route | Method | Purpose |
 |-------|--------|---------|
-| `/api/parse` | POST | Scrape TED page; returns title, presenter, `videoUrl`, `isHls`, `downloadUrl`, `transcript[]` |
-| `/api/ai` | POST | Gemini API; action `define` → word data, action `analyze` → sentence breakdown |
-
-**`/api/parse` extraction strategy:**
-1. Try known paths in `__NEXT_DATA__` (`playerData.resources`, `acmePlayerData.resources`)
-2. Fallback: regex scan entire JSON for `.m3u8` / `.mp4` URLs
-3. Prefer MP4 over HLS (`isHls: false` when MP4 available) to avoid browser CORS issues
+| `/api/parse` | POST | Scrape TED page; returns title, presenter, `videoUrl`, `isHls`, `transcript[]` |
+| `/api/ai` | POST | Gemini 2.0 Flash; `define` → word data, `analyze` → grammar breakdown, `translate` → batch translation |
+| `/api/proxy-m3u8` | GET | Proxy HLS master/sub-playlists (CORS bypass); rewrites segment URLs to direct CDN |
+| `/api/proxy-segment` | GET | Legacy; kept for non-CDN segments only |
+| `/api/proxy-audio` | GET | Proxy MP4 audio for Whisper transcription |
+| `/api/extract-audio` | POST | Server-side audio extraction helper |
+| `/api/subtitles` | GET | Subtitle fetch helper |
+| `/api/youtube-subtitles` | GET | YouTube subtitle fallback |
+| `/api/auth/signup` | POST | Register new user |
+| `/api/auth/login` | POST | Login, returns JWT cookie |
+| `/api/auth/me` | GET | Validate JWT, return user profile |
+| `/api/user/credits` | GET/POST | Read / deduct user credits |
+| `/api/user/history` | GET/POST | Read / upsert playback history |
 
 ### Key Files
 
 | File | Role |
 |------|------|
-| `src/lib/i18n.tsx` | `AppProvider` — global theme (dark/light) + language (en/zh/zh-tw/ja) state with localStorage persistence |
-| `src/app/page.tsx` | Home page: URL input, feature cards, GitHub/theme/lang controls |
-| `src/app/watch/page.tsx` | Player: HLS/MP4 video, RAF subtitle sync, word-click AI lookup, sentence analysis, shadowing recorder, SRT/PDF export |
-| `src/components/VocabBook.tsx` | Vocabulary sidebar: sorted word list, TTS playback, TXT export |
-| `src/app/api/parse/route.ts` | TED scraper with Zod URL validation and multi-path extraction |
-| `src/app/api/ai/route.ts` | Gemini proxy for word definitions and grammar analysis |
+| `src/lib/i18n.tsx` | `AppProvider` — global theme (dark/light) + language (en/zh/zh-tw/ja) state |
+| `src/lib/rateLimit.ts` | In-process IP-based rate limiter (Map-backed sliding window) |
+| `src/lib/parseCache.ts` | LRU cache for parsed TED page results (cap 100, TTL 1h) |
+| `src/lib/aiCache.ts` | LRU cache for AI word/sentence responses (cap 500, TTL 24h) |
+| `src/app/page.tsx` | Home page: URL input, feature cards, theme/lang controls |
+| `src/app/watch/page.tsx` | Player: HLS/MP4, RAF subtitle sync, word-click AI lookup, sentence analysis, Whisper recorder, SRT/PDF export |
+| `src/app/watch/types.ts` | Shared TypeScript types for the watch page |
+| `src/app/watch/components/` | Extracted modal/panel components: `HistoryModal`, `WordLookupModal`, `AIAnalysisPanel`, `PrintView`, `PrintConfigModal` |
+| `src/components/VocabBook.tsx` | Vocabulary sidebar: sorted list, TTS, TXT export |
+| `src/workers/transcribeWorker.ts` | Web Worker: Whisper (via @huggingface/transformers) for in-browser transcription |
+| `src/app/api/parse/route.ts` | TED scraper — Zod URL validation, multi-path extraction, LRU cached |
+| `src/app/api/ai/route.ts` | Gemini proxy — rate-limited per action, response cached |
+| `prisma/schema.prisma` | PostgreSQL schema: User, Transaction, History |
+
+### Caching Layers
+
+| Layer | What | TTL | Location |
+|-------|------|-----|----------|
+| Parse LRU | Parsed TED page JSON | 1 hour | `src/lib/parseCache.ts` |
+| AI LRU | Word definitions + grammar analyses | 24 hours | `src/lib/aiCache.ts` |
+| Client localStorage | Transcript text | 30 days | browser |
+| Client localStorage | Translations | 7 days | browser |
+
+### Rate Limits
+
+| Route | Limit |
+|-------|-------|
+| `/api/proxy-m3u8` | 120 req/min/IP |
+| `/api/proxy-segment` | 600 req/min/IP |
+| `/api/proxy-audio` | 30 req/min/IP |
+| `/api/ai` define | 30 req/min/IP |
+| `/api/ai` analyze | 15 req/min/IP |
+| `/api/ai` translate | 6 req/min/IP |
 
 ### Theming
 

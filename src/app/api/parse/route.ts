@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import * as jwt from "jsonwebtoken";
 import * as cheerio from "cheerio";
 import { z } from "zod";
+import { parseCache } from "@/lib/parseCache";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,14 @@ export async function POST(req: NextRequest) {
     const validation = TedUrlSchema.safeParse(url);
     if (!validation.success) {
       return NextResponse.json({ error: "Invalid TED Talk URL" }, { status: 400 });
+    }
+
+    // Cache key includes targetLang so different translations are cached separately
+    const cacheKey = `${url}::${targetLang}`;
+    const cached = parseCache.get(cacheKey);
+    if (cached) {
+      console.log("[TED Parser] cache hit:", cacheKey);
+      return NextResponse.json(cached);
     }
 
     const response = await fetch(url, {
@@ -97,9 +106,62 @@ export async function POST(req: NextRequest) {
     console.log("[TED Parser] hlsUrl:", hlsUrl, "| mp4Url:", mp4Url);
 
     // 2. Transcript Alignment
-    const transcriptData = pageProps.transcriptData || {};
-    const englishParagraphs = transcriptData.translation?.paragraphs || [];
-    const englishCues = englishParagraphs.flatMap((p: any) => (p.cues || []));
+    let englishCues: any[] = []; // Initialize englishCues here
+
+    // Try to get transcript from transcriptData (more reliable for new videos)
+    const pageTranscript = pageProps.transcriptData?.translation;
+    if (pageTranscript && pageTranscript.paragraphs) {
+      pageTranscript.paragraphs.forEach((p: any) => {
+        if (p.cues) {
+          p.cues.forEach((c: any) => {
+            englishCues.push({
+              id: c.time.toString(),
+              startTime: c.time,           // ms — matches player's currentTime * 1000
+              endTime: c.time + (c.duration || 1000),
+              text: c.text
+            });
+          });
+        }
+      });
+    }
+
+    // Try to get transcript from playerData (HLS subtitles)
+    if (englishCues.length === 0) {
+      const subtitles = videoData.playerData?.resources?.hls?.subtitles || videoData.acmePlayerData?.resources?.hls?.subtitles || [];
+      const englishSub = subtitles.find((s: any) => s.language === 'en');
+      if (englishSub) {
+        try {
+          const vttRes = await fetch(englishSub.url);
+          const vttText = await vttRes.text();
+          // Basic VTT parsing (simplified for this example, full parser would be more complex)
+          const lines = vttText.split('\n');
+          let currentCue: any = null;
+          for (const line of lines) {
+            if (line.includes('-->')) {
+              // Parse VTT timestamps to milliseconds
+              const toMs = (s: string) => {
+                const parts = s.trim().split(':');
+                if (parts.length === 3) {
+                  return (parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseFloat(parts[2])) * 1000;
+                } else if (parts.length === 2) {
+                  return (parseInt(parts[0]) * 60 + parseFloat(parts[1])) * 1000;
+                }
+                return 0;
+              };
+              const [startStr, endStr] = line.split('-->');
+              const start = toMs(startStr);
+              const end = toMs(endStr);
+              currentCue = { startTime: start, endTime: end, text: '' };
+              englishCues.push(currentCue);
+            } else if (currentCue && line.trim() !== '' && !line.startsWith('WEBVTT') && !line.startsWith('NOTE')) {
+              currentCue.text += (currentCue.text ? ' ' : '') + line.trim();
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to fetch or parse VTT subtitles", e);
+        }
+      }
+    }
 
     let translatedCues: any[] = [];
     let isTranslationMissing = false;
@@ -125,33 +187,97 @@ export async function POST(req: NextRequest) {
     }
 
     const mergedSentences = englishCues.map((eCue: any, idx: number) => {
-      let tCue = translatedCues.find((tc: any) => Math.abs(tc.time - eCue.time) < 1000);
-      return { id: idx, startTime: eCue.time, english: eCue.text, translated: tCue ? tCue.text : "" };
+      // eCue.startTime and tc.time are both in ms
+      const tCue = translatedCues.find((tc: any) => Math.abs(tc.time - eCue.startTime) < 1000);
+      return { id: idx, startTime: eCue.startTime, english: eCue.text, translated: tCue ? tCue.text : "" };
     });
 
-    // Prefer MP4 to avoid HLS CORS issues in the browser
-    // Prefer HLS from hls.ted.com because it has CORS enabled. 
-    // py.tedcdn.com MP4s often return 403 Forbidden.
-    let finalVideoUrl = mp4Url || hlsUrl;
-    let finalIsHls = !mp4Url && !!hlsUrl;
+    // Route video through server-side proxy:
+    //  • HLS (hls.ted.com) — wrap with /api/proxy-m3u8 so Chinese users and
+    //    all browsers avoid CDN CORS/GFW blocks entirely.
+    //  • MP4 (py.tedcdn.com) — often 403 from server; fall back to direct URL
+    //    so the browser can try, and if that also fails the hidden-video capture
+    //    uses the proxied HLS anyway.
+    let finalVideoUrl: string | null = null;
+    let finalIsHls = false;
 
-    if (hlsUrl && hlsUrl.includes("hls.ted.com")) {
-      finalVideoUrl = hlsUrl;
+    if (hlsUrl) {
+      finalVideoUrl = `/api/proxy-m3u8?url=${encodeURIComponent(hlsUrl)}`;
       finalIsHls = true;
+    } else if (mp4Url) {
+      finalVideoUrl = mp4Url;
+      finalIsHls = false;
     }
 
-    return NextResponse.json({
+    // Recursive search for "service": "YouTube" or "video_id"
+    const findYoutubeId = (obj: any): string | null => {
+      if (!obj || typeof obj !== 'object') return null;
+      
+      // Check directly
+      if (obj.service === 'YouTube' && obj.code) return obj.code;
+      if (obj.video_id && typeof obj.video_id === 'string' && obj.video_id.length === 11) return obj.video_id;
+      
+      // Handle stringified player data common in TED Next.js props
+      if (typeof obj.playerData === 'string' && obj.playerData.includes('{')) {
+        try {
+          const inner = JSON.parse(obj.playerData);
+          const found = findYoutubeId(inner);
+          if (found) return found;
+        } catch (e) {}
+      }
+      
+      for (const key in obj) {
+        if (key === 'playerData' && typeof obj[key] === 'string') continue; // Handled above
+        const found = findYoutubeId(obj[key]);
+        if (found) return found;
+      }
+      return null;
+    };
+
+    const youtubeId = findYoutubeId(videoData);
+    const slug = videoData.slug;
+
+    // Build alternative sources
+    const transcribeSources = [];
+    if (mp4Url) {
+      transcribeSources.push(`/api/proxy-audio?url=${encodeURIComponent(mp4Url)}`);
+    }
+    // Podcast guess pattern (often more permissive)
+    if (slug) {
+      transcribeSources.push(`/api/proxy-audio?url=${encodeURIComponent(`https://www.ted.com/talks/${slug}/download?audio=true`)}`);
+    }
+    
+    // Fallbacks: If proxy gets 403, the client will try these raw URLs. 
+    // They might fail CORS, but podcasts often don't, and if the client is on mobile/PWA, it might succeed.
+    if (mp4Url) {
+      transcribeSources.push(mp4Url);
+    }
+    if (slug) {
+      transcribeSources.push(`https://www.ted.com/talks/${slug}/download?audio=true`);
+    }
+
+    const result = {
       title: videoData.title,
-      presenter: videoData.presenterDisplayName,
+      presenter: videoData.presenterDisplayName || videoData.presenter,
       description: videoData.description,
       thumbnail: videoData.playerData?.thumb || videoData.thumb || "",
       videoUrl: finalVideoUrl,
-      downloadUrl: mp4Url,
+      hlsUrl: hlsUrl,   // raw CDN URL for server-side audio extraction
+      audioUrl: mp4Url ? `/api/proxy-audio?url=${encodeURIComponent(mp4Url)}` : null,
+      transcribeUrl: transcribeSources[0] || null,
+      transcribeSources,
+      youtubeId,
+      youtubeTranscriptUrl: youtubeId ? `/api/youtube-subtitles?id=${youtubeId}` : null,
+      slug,
+      downloadUrl: mp4Url ? `/api/proxy-audio?url=${encodeURIComponent(mp4Url)}` : null,
       isHls: finalIsHls,
       transcript: mergedSentences,
       isTranslationMissing,
-      needsTranscription: englishCues.length === 0
-    });
+      needsTranscription: englishCues.length === 0,
+    };
+
+    parseCache.set(cacheKey, result);
+    return NextResponse.json(result);
   } catch (error: any) {
     console.error("TED Parser Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });

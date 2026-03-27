@@ -11,9 +11,16 @@ RUN npm ci
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# Build-time env vars (non-secret)
 ENV NEXT_TELEMETRY_DISABLED=1
+# Generate Prisma client for the target database provider
+RUN npx prisma generate
 RUN npm run build
+
+# ── Database migration runner (used by docker compose run migrate) ─
+FROM base AS migrate
+COPY --from=deps /app/node_modules ./node_modules
+COPY prisma ./prisma
+CMD ["npx", "prisma", "migrate", "deploy"]
 
 # ── Production runner ─────────────────────────────────────────────
 FROM base AS runner

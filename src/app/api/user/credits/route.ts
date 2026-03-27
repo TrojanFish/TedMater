@@ -5,7 +5,8 @@ import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
-const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret";
+const JWT_SECRET = process.env.JWT_SECRET as string;
+if (!JWT_SECRET) throw new Error("JWT_SECRET environment variable is not set");
 
 async function getUser() {
   const cookieStore = await cookies();
@@ -30,9 +31,10 @@ export async function POST(req: Request) {
   const { action } = await req.json();
 
   const COSTS: Record<string, number> = {
-     "WORD_LOOKUP": 1,
-     "AI_ANALYZE": 5,
-     "PDF_EXPORT": 10
+    "WORD_LOOKUP": 1,
+    "AI_ANALYZE": 5,
+    "PDF_EXPORT": 10,
+    "AI_TRANSLATE": 20,
   };
 
   const cost = COSTS[action];

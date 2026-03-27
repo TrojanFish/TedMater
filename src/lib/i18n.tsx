@@ -78,6 +78,16 @@ const T = {
     settings: "Settings",
     display: "Display",
     history: "History",
+    aiTranscribe: "AI Local Transcribe",
+    aiTranscribing: "AI Transcribing...",
+    aiTranslate: "AI Translate",
+    aiTranslating: "AI Translating...",
+    preparingAudio: "Preparing audio data...",
+    subtitleLangLabel: "Subtitle Language",
+    loadingSubtitles: "Loading subtitles...",
+    continueLearning: "Continue Learning",
+    tryExample: "Try an example",
+    register: "Register",
   },
   zh: {
     appName: "TEDMaster",
@@ -151,6 +161,16 @@ const T = {
     settings: "设置",
     display: "显示",
     history: "播放历史",
+    aiTranscribe: "AI 本地转录",
+    aiTranscribing: "AI 转录中...",
+    aiTranslate: "AI 翻译",
+    aiTranslating: "AI 翻译中...",
+    preparingAudio: "正在准备音频数据...",
+    subtitleLangLabel: "字幕语言",
+    loadingSubtitles: "正在加载字幕...",
+    continueLearning: "继续学习",
+    tryExample: "快速体验",
+    register: "注册",
   },
   "zh-tw": {
     appName: "TEDMaster",
@@ -224,6 +244,16 @@ const T = {
     settings: "設置",
     display: "顯示",
     history: "播放歷史",
+    aiTranscribe: "AI 本地轉錄",
+    aiTranscribing: "AI 轉錄中...",
+    aiTranslate: "AI 翻譯",
+    aiTranslating: "AI 翻譯中...",
+    preparingAudio: "正在準備音訊數據...",
+    subtitleLangLabel: "字幕語言",
+    loadingSubtitles: "正在載入字幕...",
+    continueLearning: "繼續學習",
+    tryExample: "快速體驗",
+    register: "注冊",
   },
   ja: {
     appName: "TEDMaster",
@@ -297,6 +327,16 @@ const T = {
     settings: "設定",
     display: "表示",
     history: "再生履歴",
+    aiTranscribe: "Local AI文字起こし",
+    aiTranscribing: "AI文字起こし中...",
+    aiTranslate: "AI翻訳",
+    aiTranslating: "AI翻訳中...",
+    preparingAudio: "音声データを準備中...",
+    subtitleLangLabel: "字幕言語",
+    loadingSubtitles: "字幕を読み込み中...",
+    continueLearning: "学習を続ける",
+    tryExample: "サンプルを試す",
+    register: "登録",
   },
 } as const;
 
@@ -305,6 +345,8 @@ type Translations = { [K in keyof typeof T.en]: string };
 interface AppContextType {
   lang: Lang;
   setLang: (l: Lang) => void;
+  subtitleLang: string;
+  setSubtitleLang: (l: string) => void;
   theme: Theme;
   toggleTheme: () => void;
   t: Translations;
@@ -312,9 +354,23 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | null>(null);
 
+// Default subtitle lang derived from UI lang (used when no saved preference)
+const UI_TO_SUBTITLE: Record<string, string> = {
+  zh: "zh-cn", "zh-tw": "zh-tw", ja: "ja", en: "en",
+};
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>("en");
   const [theme, setTheme] = useState<Theme>("dark");
+  // Lazy init: read localStorage synchronously so the value is correct on first render,
+  // preventing a double-fetch in the watch page.
+  const [subtitleLang, setSubtitleLangState] = useState<string>(() => {
+    if (typeof window === "undefined") return "zh-cn";
+    const saved = localStorage.getItem("tm_subtitle_lang");
+    if (saved) return saved;
+    const uiLang = localStorage.getItem("tm_lang");
+    return UI_TO_SUBTITLE[uiLang || ""] || "zh-cn";
+  });
 
   useEffect(() => {
     const savedLang = localStorage.getItem("tm_lang") as Lang | null;
@@ -332,6 +388,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("tm_lang", l);
   };
 
+  const setSubtitleLang = (l: string) => {
+    setSubtitleLangState(l);
+    localStorage.setItem("tm_subtitle_lang", l);
+  };
+
   const toggleTheme = () => {
     const next: Theme = theme === "dark" ? "light" : "dark";
     setTheme(next);
@@ -339,7 +400,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AppContext.Provider value={{ lang, setLang, theme, toggleTheme, t: T[lang] }}>
+    <AppContext.Provider value={{ lang, setLang, subtitleLang, setSubtitleLang, theme, toggleTheme, t: T[lang] }}>
       {children}
     </AppContext.Provider>
   );
@@ -356,4 +417,17 @@ export const LANGS: { value: Lang; label: string; short: string }[] = [
   { value: "zh", label: "简体中文", short: "简" },
   { value: "zh-tw", label: "繁體中文", short: "繁" },
   { value: "ja", label: "日本語", short: "日" },
+];
+
+// Subtitle language options — TED translation language codes
+export const SUBTITLE_LANGS: { value: string; label: string; short: string }[] = [
+  { value: "en",    label: "English only", short: "EN" },
+  { value: "zh-cn", label: "简体中文",      short: "简" },
+  { value: "zh-tw", label: "繁體中文",      short: "繁" },
+  { value: "ja",    label: "日本語",        short: "日" },
+  { value: "ko",    label: "한국어",        short: "한" },
+  { value: "fr",    label: "Français",      short: "FR" },
+  { value: "es",    label: "Español",       short: "ES" },
+  { value: "pt",    label: "Português",     short: "PT" },
+  { value: "de",    label: "Deutsch",       short: "DE" },
 ];

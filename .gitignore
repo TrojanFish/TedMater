@@ -46,6 +46,7 @@ next-env.d.ts
 /debug-*.js
 /test-*.js
 /scan-urls.js
+/download-models.js
 /*.json
 !package.json
 !tsconfig.json
@@ -54,5 +55,11 @@ next-env.d.ts
 !eslint.config.*
 /dev.db
 /dev.db-journal
+/prisma/dev.db
+/prisma/dev.db-journal
 /prisma.config.ts.bak
 /src/tmp/
+/tmp/
+
+# Whisper / ONNX model weights (large binary files — download at runtime)
+/public/models/
