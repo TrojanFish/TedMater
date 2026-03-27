@@ -867,14 +867,7 @@ function WatchContent() {
           </span>
         </Link>
 
-        {/* Video Title - Center */}
-        <div className="hidden lg:flex flex-1 mx-8 items-center justify-center min-w-0">
-          <div className="px-4 py-2 bg-background border-2 border-border rounded-xl shadow-pop max-w-md w-full flex items-center gap-3 overflow-hidden">
-             <div className="w-2 h-2 rounded-full bg-accent animate-pulse shrink-0" />
-             <span className="text-xs font-black text-foreground truncate uppercase tracking-tight">{data?.title || t.tagline}</span>
-          </div>
-        </div>
-
+        {/* Header content continues... */}
         <div className="flex items-center gap-4">
           <div className="hidden sm:flex items-center gap-2">
             <button onClick={() => setShowMoreMenu(!showMoreMenu)}
@@ -1189,7 +1182,7 @@ function WatchContent() {
                         className={`group/item p-4 rounded-2xl border-2 transition-all cursor-pointer relative
                           ${isActive 
                             ? "bg-white border-border shadow-pop-lg translate-x-1" 
-                            : "bg-white/40 border-transparent hover:bg-white hover:border-muted hover:shadow-pop"}`}>
+                            : "bg-white/60 border-muted hover:bg-white hover:border-border hover:shadow-pop"}`}>
                         
                         {/* Status Dots */}
                         <div className="absolute left-0 top-1/2 -translate-x-3 -translate-y-1/2 flex flex-col gap-1">

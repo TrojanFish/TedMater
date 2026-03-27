@@ -16,73 +16,77 @@ export default function HistoryModal({ historyItems, currentUrl, onClose, onSele
 
   return (
     <div
-      className="fixed inset-0 z-[150] flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-[150] flex items-center justify-center p-6 bg-foreground/20 backdrop-blur-md"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[80vh]"
-        style={{ background: "var(--bg-2)", border: "1px solid var(--border)" }}
+        className="card-sticker w-full max-w-2xl flex flex-col overflow-hidden max-h-[80vh] shadow-pop-lg bg-white border-2"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b shrink-0" style={{ borderColor: "var(--border)" }}>
-          <div className="flex items-center gap-2">
-            <HistoryIcon size={16} style={{ color: "var(--accent)" }} />
-            <span className="font-bold text-sm">{t.history}</span>
-            <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "var(--bg-3)", color: "var(--text-3)" }}>
+        <div className="flex items-center justify-between px-6 py-4 border-b-2 border-border shrink-0 bg-white">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-secondary border-2 border-border flex items-center justify-center -rotate-6">
+              <HistoryIcon size={16} className="text-white" strokeWidth={2.5} />
+            </div>
+            <span className="font-black text-lg uppercase tracking-widest text-foreground">{t.history}</span>
+            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-muted border-2 border-border">
               {historyItems.length}
             </span>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg transition-colors"
-            style={{ color: "var(--text-2)" }}
-            onMouseEnter={e => (e.currentTarget.style.background = "var(--bg-3)")}
-            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+            className="w-10 h-10 border-2 border-border bg-white rounded-xl shadow-pop hover:scale-110 active:scale-95 transition-all flex items-center justify-center"
           >
-            <X size={16} />
+            <X size={18} strokeWidth={2.5} />
           </button>
         </div>
 
-        <div className="overflow-y-auto custom-scrollbar divide-y" style={{ borderColor: "var(--border)" }}>
+        <div className="overflow-y-auto custom-scrollbar divide-y-2 divide-muted bg-background/50">
           {historyItems.length === 0 ? (
-            <div className="py-16 text-center text-sm" style={{ color: "var(--text-3)" }}>No recent history</div>
+            <div className="py-20 text-center space-y-3">
+              <div className="text-4xl">🕰️</div>
+              <p className="text-sm font-black uppercase text-muted-foreground tracking-widest">No recent history</p>
+            </div>
           ) : (
-            historyItems.map(h => (
-              <button
-                key={h.id}
-                onClick={() => onSelect(h.videoUrl, Math.floor(h.progressTime))}
-                className="w-full px-6 py-4 flex items-center gap-4 text-left transition-colors group"
-                style={{ opacity: h.videoUrl === currentUrl ? 0.45 : 1 }}
-                onMouseEnter={e => (e.currentTarget.style.background = "var(--bg-3)")}
-                onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-              >
-                <div
-                  className="shrink-0 w-10 h-10 rounded-xl flex flex-col items-center justify-center text-center"
-                  style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
+            historyItems.map(h => {
+              const isActive = h.videoUrl === currentUrl;
+              return (
+                <button
+                  key={h.id}
+                  onClick={() => onSelect(h.videoUrl, Math.floor(h.progressTime))}
+                  className={`w-full px-6 py-5 flex items-center gap-4 text-left transition-all group relative
+                    ${isActive ? "bg-accent/5 opacity-60 grayscale-[0.5]" : "hover:bg-white"}`}
                 >
-                  <span className="text-[11px] font-black leading-none" style={{ color: "var(--accent)" }}>
-                    {Math.floor(h.progressTime / 60)}
-                  </span>
-                  <span className="text-[9px] opacity-40">min</span>
-                </div>
-                <div className="flex-1 min-w-0 space-y-1">
-                  <p className="text-sm font-semibold truncate" style={{ color: "var(--text)" }}>{h.title}</p>
-                  <p className="text-xs truncate" style={{ color: "var(--text-3)" }}>{h.presenter}</p>
-                  {h.duration && (
-                    <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "var(--bg-3)" }}>
-                      <div
-                        className="h-full rounded-full"
-                        style={{ width: `${Math.min((h.progressTime / h.duration) * 100, 100)}%`, background: "var(--accent)" }}
-                      />
+                  <div
+                    className="shrink-0 w-12 h-12 rounded-xl flex flex-col items-center justify-center text-center bg-white border-2 border-border shadow-pop group-hover:scale-110 transition-transform"
+                  >
+                    <span className="text-xs font-black leading-none text-accent">
+                      {Math.floor(h.progressTime / 60)}
+                    </span>
+                    <span className="text-[9px] font-bold opacity-40 uppercase">min</span>
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    <p className="text-sm font-black truncate text-foreground group-hover:text-accent transition-colors uppercase tracking-tight">{h.title}</p>
+                    <div className="flex items-center gap-2">
+                       <span className="text-[10px] font-bold text-muted-foreground uppercase">{h.presenter}</span>
+                       <div className="w-1 h-1 rounded-full bg-border opacity-20" />
+                       <span className="text-[10px] font-black text-muted-foreground uppercase">{Math.floor(h.progressTime / 60)}:{(Math.floor(h.progressTime % 60)).toString().padStart(2, "0")}</span>
                     </div>
+                    {h.duration && (
+                      <div className="w-full h-2 rounded-full overflow-hidden bg-muted border border-border/10">
+                        <div
+                          className="h-full rounded-full bg-secondary shadow-sm transition-all"
+                          style={{ width: `${Math.min((h.progressTime / h.duration) * 100, 100)}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  {isActive && (
+                    <span className="absolute right-4 top-4 text-[9px] font-black text-accent border border-accent rounded px-1 tracking-tighter uppercase animate-pulse">Viewing</span>
                   )}
-                </div>
-                <span className="text-xs shrink-0" style={{ color: "var(--text-3)" }}>
-                  {Math.floor(h.progressTime / 60)}:{(Math.floor(h.progressTime % 60)).toString().padStart(2, "0")}
-                  {h.duration ? ` / ${Math.floor(h.duration / 60)}:${(Math.floor(h.duration % 60)).toString().padStart(2, "0")}` : ""}
-                </span>
-              </button>
-            ))
+                </button>
+              );
+            })
           )}
         </div>
       </div>

@@ -18,72 +18,76 @@ export default function AIAnalysisPanel({ analysis, sentence, savedSentences, on
 
   return (
     <section
-      className="hidden md:flex w-[300px] shrink-0 flex-col overflow-hidden border-l"
-      style={{ borderColor: "var(--border)", background: "var(--bg)" }}
+      className="hidden md:flex w-[320px] shrink-0 flex-col overflow-hidden border-l-2 border-border bg-white"
     >
       {/* Header */}
-      <div className="px-4 py-3 border-b shrink-0 flex items-center justify-between" style={{ borderColor: "var(--border)", background: "var(--bg-2)" }}>
-        <div className="flex items-center gap-2">
-          <Sparkles size={13} style={{ color: "var(--accent)" }} />
-          <span className="text-sm font-bold">{t.aiAnalysis}</span>
+      <div className="px-5 py-4 border-b-2 border-muted shrink-0 flex items-center justify-between bg-white">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-tertiary border-2 border-border flex items-center justify-center -rotate-6">
+             <Sparkles size={16} className="text-foreground" strokeWidth={2.5} />
+          </div>
+          <span className="text-sm font-black uppercase tracking-widest text-foreground">{t.aiAnalysis}</span>
         </div>
         <button
           onClick={onClose}
-          className="p-1 rounded-lg transition-colors"
-          style={{ color: "var(--text-3)" }}
-          onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
-          onMouseLeave={e => (e.currentTarget.style.color = "var(--text-3)")}
+          className="w-8 h-8 border-2 border-border bg-white rounded-lg shadow-pop hover:scale-110 active:scale-95 transition-all flex items-center justify-center"
         >
-          <X size={15} />
+          <X size={15} strokeWidth={2.5} />
         </button>
       </div>
 
       {/* Sentence context */}
       {sentence && (
-        <div className="px-4 py-3 border-b shrink-0" style={{ borderColor: "var(--border)", background: "var(--accent-s)" }}>
-          <p className="text-xs leading-relaxed font-medium" style={{ color: "var(--text)" }}>{sentence.english}</p>
+        <div className="px-5 py-5 border-b-2 border-muted shrink-0 bg-background/30">
+          <p className="text-xs leading-relaxed font-black text-foreground">{sentence.english}</p>
           {sentence.translated && (
-            <p className="text-xs mt-1 leading-relaxed" style={{ color: "var(--text-2)" }}>{sentence.translated}</p>
+            <p className="text-[11px] mt-2 leading-relaxed font-bold text-muted-foreground">{sentence.translated}</p>
           )}
         </div>
       )}
 
       {/* Analysis content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--accent)" }}>{t.structure}</p>
-          <p className="text-xs leading-relaxed" style={{ color: "var(--text)" }}>{analysis.structureZh}</p>
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-6 bg-white">
+        <div className="space-y-3">
+          <p className="text-[10px] font-black uppercase tracking-widest text-accent mb-2">{t.structure}</p>
+          <div className="p-4 rounded-xl bg-accent/5 border-2 border-accent/10">
+             <p className="text-xs leading-relaxed font-bold text-foreground">{analysis.structureZh}</p>
+          </div>
         </div>
-        <div className="space-y-2.5">
+
+        <div className="space-y-4">
           {analysis.breakdown?.map((p, i) => (
-            <div key={i} className="text-[11px] leading-relaxed">
-              <span className="font-mono font-bold" style={{ color: "var(--accent)" }}>{p.label}</span>
-              <span className="ml-2 font-semibold" style={{ color: "var(--text)" }}>{p.content}</span>
-              {p.explanation && <p className="mt-0.5 pl-0" style={{ color: "var(--text-2)" }}>{p.explanation}</p>}
+            <div key={i} className="space-y-1 group">
+               <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-secondary group-hover:scale-125 transition-transform" />
+                  <span className="text-[11px] font-black uppercase tracking-widest text-secondary">{p.label}</span>
+               </div>
+               <p className="text-xs font-black text-foreground pl-3.5 leading-tight">{p.content}</p>
+               {p.explanation && <p className="text-[10px] font-semibold text-muted-foreground pl-3.5 leading-relaxed">{p.explanation}</p>}
             </div>
           ))}
         </div>
-        <div className="pt-3 border-t space-y-2" style={{ borderColor: "var(--border)" }}>
-          <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--accent)" }}>{t.insights}</p>
+
+        <div className="pt-6 border-t-2 border-muted space-y-4">
+          <p className="text-[10px] font-black uppercase tracking-widest text-quaternary">{t.insights}</p>
           {analysis.insights.map((ins, i) => (
-            <div key={i} className="text-xs space-y-0.5">
-              <p className="font-semibold" style={{ color: "var(--text)" }}>{ins.title}</p>
-              <p style={{ color: "var(--text-2)" }}>{ins.content}</p>
+            <div key={i} className="p-3 rounded-xl bg-quaternary/5 border border-quaternary/20 space-y-1">
+              <p className="text-[11px] font-black text-foreground uppercase tracking-tight">{ins.title}</p>
+              <p className="text-[10px] font-semibold text-muted-foreground leading-relaxed">{ins.content}</p>
             </div>
           ))}
         </div>
       </div>
 
       {/* Save button */}
-      <div className="px-4 py-3 border-t shrink-0" style={{ borderColor: "var(--border)" }}>
+      <div className="px-5 py-5 border-t-2 border-muted shrink-0 bg-white">
         {sentence && (
           <button
             onClick={() => onSave(sentence, analysis)}
-            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold text-white transition-all"
-            style={{ background: isSaved ? "var(--text-3)" : "var(--accent)" }}
+            className={`w-full btn-candy py-4 text-xs group ${isSaved ? "bg-muted text-muted-foreground border-border/20 shadow-none pointer-events-none" : ""}`}
           >
-            <BookMarked size={12} />
-            {isSaved ? "SAVED" : t.saveSentence}
+            <BookMarked size={16} className={`mr-2 ${isSaved ? "" : "group-hover:rotate-12 transition-transform"}`} strokeWidth={2.5} />
+            <span className="uppercase font-black tracking-widest">{isSaved ? "SAVED" : t.saveSentence}</span>
           </button>
         )}
       </div>
