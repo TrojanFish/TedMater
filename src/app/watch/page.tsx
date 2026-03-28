@@ -5,8 +5,8 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Play, Pause, Settings, Loader2, Sparkles, X, Home, Download, LogIn,
-  Mic, FastForward, BookMarked, Sliders,
-  FileText, Video, FileCode, Sun, Moon, Zap,
+  BookMarked, Sliders,
+  FileText, FileCode, Sun, Moon, Zap,
   Maximize, PictureInPicture, Volume, Volume1, Volume2, Lock, LogOut, History as HistoryIcon,
   MoreHorizontal, Globe, ChevronDown
 } from "lucide-react";
@@ -348,7 +348,7 @@ function WatchContent() {
             setIsTranscribing(false);
             setTranscribeStatus('');
           } else if (status === 'error') {
-            alert('转录失败: ' + message);
+            showToast('转录失败: ' + message);
             setIsTranscribing(false);
             // Terminate and reset so next attempt can create a fresh worker
             workerRef.current?.terminate();
@@ -362,7 +362,7 @@ function WatchContent() {
       workerRef.current.postMessage({ type: 'transcribe', audio: float32Data });
     } catch (err: any) {
       console.error('[ASR] Fatal error:', err);
-      alert('音频处理失败: ' + err.message);
+      showToast('音频处理失败: ' + err.message);
       setIsTranscribing(false);
     }
   };
@@ -430,9 +430,7 @@ function WatchContent() {
   const handleAiTranslate = async () => {
     if (!data || !user) return;
     if (user.credits < AI_TRANSLATE_COST) {
-      alert(lang === "en"
-        ? `Insufficient credits. Need ${AI_TRANSLATE_COST} pts.`
-        : `积分不足，需要 ${AI_TRANSLATE_COST} 积分`);
+      showToast(lang === "en" ? `Insufficient credits. Need ${AI_TRANSLATE_COST} pts.` : `积分不足，需要 ${AI_TRANSLATE_COST} 积分`);
       return;
     }
 
@@ -479,19 +477,12 @@ function WatchContent() {
       });
     } catch (err: any) {
       console.error("[AI Translate]", err);
-      alert(err.message);
+      showToast(err.message);
     } finally {
       setIsAiTranslating(false);
     }
   };
 
-  // Recording
-  const [recordingId, setRecordingId] = useState<number | null>(null);
-  const [audioUrls, setAudioUrls] = useState<Record<number, string>>({});
-  const audioUrlsRef = useRef<Record<number, string>>({});
-  // Keep ref in sync so cleanup effect can revoke all blob URLs on unmount
-  useEffect(() => { audioUrlsRef.current = audioUrls; }, [audioUrls]);
-  useEffect(() => () => { Object.values(audioUrlsRef.current).forEach(URL.revokeObjectURL); }, []);
   const [user, setUser] = useState<{ email: string; credits: number } | null>(null);
   // Keep a ref in sync with user so HLS cleanup can read it without being a dep
   const userRef = useRef<{ email: string; credits: number } | null>(null);
@@ -499,9 +490,13 @@ function WatchContent() {
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [showHistory, setShowHistory] = useState(false);
+  const [toasts, setToasts] = useState<{id: number; msg: string; type: 'error'|'info'}[]>([]);
+  const showToast = useCallback((msg: string, type: 'error'|'info' = 'error') => {
+    const id = Date.now();
+    setToasts(p => [...p, { id, msg, type }]);
+    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 4000);
+  }, []);
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const activeParagraphRef = useRef<HTMLDivElement>(null);
@@ -750,24 +745,6 @@ function WatchContent() {
     setEditingNoteId(null);
   };
 
-  const startRecording = async (id: number) => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder; audioChunksRef.current = [];
-      recorder.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
-      recorder.onstop = () => {
-        const newUrl = URL.createObjectURL(new Blob(audioChunksRef.current, { type: "audio/webm" }));
-        setAudioUrls(prev => { if (prev[id]) URL.revokeObjectURL(prev[id]); return { ...prev, [id]: newUrl }; });
-        setRecordingId(null); stream.getTracks().forEach(t => t.stop());
-      };
-      recorder.start(); setRecordingId(id);
-    } catch (e) { console.error(e); }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
-  };
 
   // AbortController for in-flight word lookup — cancelled when user clicks a different word or unmount
   const wordAbortRef = useRef<AbortController | null>(null);
@@ -782,7 +759,7 @@ function WatchContent() {
         body: JSON.stringify({ action })
       });
       const d = await res.json();
-      if (!res.ok) { alert(d.error || "Points issue"); return false; }
+      if (!res.ok) { showToast(d.error || "Points issue"); return false; }
       setUser(prev => prev ? ({ ...prev, credits: d.credits }) : null);
       return true;
     } catch { return false; }
@@ -803,6 +780,7 @@ function WatchContent() {
     if (!(await deductPoints("AI_ANALYZE"))) return;
 
     videoRef.current?.pause(); setIsPlaying(false);
+    setAnalysisPanelId(item.id);  // Open panel immediately with loading state
     setAnalysisLoading(item.id);
     const ac = new AbortController();
     try {
@@ -810,7 +788,6 @@ function WatchContent() {
       const result = await res.json();
       if (!res.ok) throw new Error(result.error);
       setAnalysisData(prev => ({ ...prev, [item.id]: result }));
-      setAnalysisPanelId(item.id);
     } catch (e: any) { if (e.name !== "AbortError") console.error(e); }
     finally { setAnalysisLoading(null); }
   };
@@ -833,10 +810,10 @@ function WatchContent() {
   );
 
   /* ── Print styles ──────────────────────────────────────────── */
-  const printStyle = `@media print { html,body{height:auto!important;overflow:visible!important;background:white!important;color:black!important} body>div,#__next>div{height:auto!important;overflow:visible!important} .print-hidden{display:none!important} #print-view{display:block!important} @page{margin:15mm 20mm;size:A4} }`;
+  const printStyle = `@media print { html,body{height:auto!important;overflow:visible!important;background:white!important;color:black!important} body>div{height:auto!important;overflow:visible!important} header{display:none!important} .print-hidden{display:none!important} #print-view{display:block!important} @page{margin:15mm 20mm;size:A4} }`;
 
   return (
-    <div className="h-screen overflow-hidden flex flex-col bg-background font-body selection:bg-tertiary selection:text-foreground">
+    <div className="h-screen overflow-hidden flex flex-col bg-background font-body selection:bg-tertiary selection:text-foreground print:h-auto print:overflow-visible">
       
       {/* ── Background Decorations ────────────────────────────── */}
       <div className="fixed inset-0 pointer-events-none z-0">
@@ -1009,7 +986,7 @@ function WatchContent() {
         </div>
       )}
 
-      <main className="flex-1 min-h-0 flex flex-col lg:flex-row gap-6 p-4 sm:p-8 relative z-10 overflow-hidden print-hidden">
+      <main className="flex-1 min-h-0 flex flex-col lg:flex-row gap-6 p-4 sm:p-8 relative overflow-hidden print-hidden">
 
         {/* ── Video player ─────────────────────────────────────── */}
         <section className="shrink-0 lg:flex-[3] lg:shrink flex flex-col gap-4 min-w-0">
@@ -1302,13 +1279,10 @@ function WatchContent() {
                                <button onClick={e => { e.stopPropagation(); if (analysisPanelId === item.id) setAnalysisPanelId(null); else handleDeepAnalyze(item); }}
                                  className={`btn-candy text-[10px] px-3 py-1.5 shadow-none hover:shadow-pop hover:scale-105 active:scale-95
                                    ${analysisData[item.id] ? "bg-tertiary border-border text-foreground" : "bg-white border-muted text-muted-foreground"}`}>
-                                 {analysisLoading === item.id ? <Loader2 size={12} className="animate-spin text-accent" /> : <Sparkles size={12} className="text-accent" />}
-                                 <span className="ml-1 uppercase font-black">{t.analyzeBtn}</span>
-                               </button>
-                               <button onClick={e => { e.stopPropagation(); if (recordingId === item.id) stopRecording(); else startRecording(item.id); }}
-                                 className="btn-candy text-[10px] px-3 py-1.5 bg-white border-muted text-muted-foreground shadow-none hover:bg-secondary hover:text-white hover:border-secondary hover:shadow-pop hover:scale-105 active:scale-95">
-                                 <Mic size={12} />
-                                 <span className="ml-1 uppercase font-black">{recordingId === item.id ? t.recording : t.recordBtn}</span>
+                                 <span className="flex items-center gap-1.5">
+                                   {analysisLoading === item.id ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                                   <span className="uppercase font-black">{t.analyzeBtn}</span>
+                                 </span>
                                </button>
                                <button onClick={e => { e.stopPropagation(); setEditingNoteId(editingNoteId === item.id ? null : item.id); setNoteInput(notes[item.id] || ""); }}
                                  className={`btn-candy text-[10px] px-3 py-1.5 shadow-none hover:shadow-pop hover:scale-105 active:scale-95
@@ -1348,22 +1322,24 @@ function WatchContent() {
         </div>
       </section>
 
-        {/* ── AI Analysis panel (Drawer-like overlay) ───────────────────── */}
-        {analysisPanelId !== null && analysisData[analysisPanelId] && (
-          <div className="fixed inset-y-0 right-0 w-[480px] max-w-full z-[210] animate-in slide-in-from-right duration-500 shadow-pop-lg">
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-md" onClick={() => setAnalysisPanelId(null)} />
-            <div className="relative h-full bg-white border-l-4 border-border flex flex-col shadow-[-20px_0_50px_-12px_rgba(0,0,0,0.15)]">
-              <AIAnalysisPanel
-                analysis={analysisData[analysisPanelId]}
-                sentence={data?.transcript.find(i => i.id === analysisPanelId)}
-                savedSentences={savedSentences}
-                onClose={() => setAnalysisPanelId(null)}
-                onSave={saveSentence}
-              />
-            </div>
-          </div>
-        )}
       </main>
+
+      {/* ── AI Analysis panel (Drawer-like overlay) ───────────────────── */}
+      {analysisPanelId !== null && (analysisData[analysisPanelId] || analysisLoading === analysisPanelId) && (
+        <div className="fixed inset-y-0 right-0 w-[480px] max-w-full z-[210] animate-in slide-in-from-right duration-500 shadow-pop-lg">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-md" onClick={() => setAnalysisPanelId(null)} />
+          <div className="relative h-full bg-white border-l-4 border-border flex flex-col shadow-[-20px_0_50px_-12px_rgba(0,0,0,0.15)]">
+            <AIAnalysisPanel
+              analysis={analysisData[analysisPanelId]}
+              loading={analysisLoading === analysisPanelId}
+              sentence={data?.transcript.find(i => i.id === analysisPanelId)}
+              savedSentences={savedSentences}
+              onClose={() => setAnalysisPanelId(null)}
+              onSave={saveSentence}
+            />
+          </div>
+        </div>
+      )}
 
       {/* ── Word modal ─────────────────────────────────────────── */}
       {activeWord && (
@@ -1420,6 +1396,19 @@ function WatchContent() {
         savedSentences={savedSentences}
         notes={notes}
       />
+
+      {/* ── Toast notifications ─────────────────────────────────── */}
+      {toasts.length > 0 && (
+        <div className="fixed bottom-6 right-6 z-[500] flex flex-col gap-3 pointer-events-none print-hidden">
+          {toasts.map(toast => (
+            <div key={toast.id}
+              className={`pointer-events-auto max-w-xs px-5 py-4 rounded-2xl border-2 border-border shadow-pop-lg font-bold text-sm animate-in slide-in-from-bottom-4 fade-in duration-300
+                ${toast.type === 'error' ? 'bg-secondary text-white border-secondary/50' : 'bg-white text-foreground'}`}>
+              {toast.msg}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
