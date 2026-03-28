@@ -234,18 +234,39 @@ export async function POST(req: NextRequest) {
       } catch (e) { console.warn("[TED Parser] transcript.json no-lang failed:", e); }
     }
 
-    // Path 4: HLS subtitle track (.vtt)
+    // Path 4a: HLS metadata.json → subtitles[].webvtt (current TED CDN structure)
+    if (!englishCues.length) {
+      const metadataUrl: string | null =
+        playerData?.resources?.hls?.metadata ||
+        acmePlayerData?.resources?.hls?.metadata ||
+        null;
+      if (metadataUrl) {
+        try {
+          const metaRes = await fetch(metadataUrl, { signal: AbortSignal.timeout(10_000) });
+          if (metaRes.ok) {
+            const metaData = await metaRes.json();
+            const enSub = (metaData.subtitles || []).find((s: any) => s.code === "en");
+            if (enSub?.webvtt) {
+              const vttRes = await fetch(enSub.webvtt, { signal: AbortSignal.timeout(10_000) });
+              if (vttRes.ok) englishCues = vttToEnglishCues(await vttRes.text());
+              console.log("[TED Parser] HLS metadata VTT path 4a:", englishCues.length, "cues");
+            }
+          }
+        } catch (e) { console.warn("[TED Parser] HLS metadata fetch failed:", e); }
+      }
+    }
+
+    // Path 4b: HLS subtitle track embedded in playerData (older TED structure)
     if (!englishCues.length) {
       const subtitles =
         playerData?.resources?.hls?.subtitles ||
-        acmePlayerData?.resources?.hls?.subtitles ||
-        videoData.playerData?.resources?.hls?.subtitles || [];
-      const enSub = subtitles.find((s: any) => s.language === "en");
-      if (enSub?.url) {
+        acmePlayerData?.resources?.hls?.subtitles || [];
+      const enSub = subtitles.find((s: any) => s.language === "en" || s.code === "en");
+      if (enSub?.url || enSub?.webvtt) {
         try {
-          const vttRes = await fetch(enSub.url, { signal: AbortSignal.timeout(10_000) });
+          const vttRes = await fetch(enSub.url || enSub.webvtt, { signal: AbortSignal.timeout(10_000) });
           if (vttRes.ok) englishCues = vttToEnglishCues(await vttRes.text());
-          console.log("[TED Parser] HLS VTT path 4:", englishCues.length, "cues");
+          console.log("[TED Parser] HLS VTT path 4b:", englishCues.length, "cues");
         } catch (e) { console.warn("[TED Parser] VTT fetch failed:", e); }
       }
     }
@@ -306,6 +327,34 @@ export async function POST(req: NextRequest) {
             console.log("[TED Parser] translation API path B:", translatedCues.length, "cues");
           }
         } catch (e) { console.warn("[TED Parser] translation API failed:", e); }
+      }
+
+      // Path C: HLS metadata.json → translated VTT (matches current TED CDN structure)
+      if (!translatedCues.length) {
+        const metadataUrl: string | null =
+          playerData?.resources?.hls?.metadata ||
+          acmePlayerData?.resources?.hls?.metadata ||
+          null;
+        if (metadataUrl) {
+          try {
+            const metaRes = await fetch(metadataUrl, { signal: AbortSignal.timeout(10_000) });
+            if (metaRes.ok) {
+              const metaData = await metaRes.json();
+              const tSub = (metaData.subtitles || []).find(
+                (s: any) => s.code === targetLang || s.code === targetLang.split("-")[0]
+              );
+              if (tSub?.webvtt) {
+                const vttRes = await fetch(tSub.webvtt, { signal: AbortSignal.timeout(10_000) });
+                if (vttRes.ok) {
+                  const tCues = vttToEnglishCues(await vttRes.text());
+                  // Convert to TED cue format (time in ms) for merging
+                  translatedCues = tCues.map((c: any) => ({ time: c.startTime, text: c.text }));
+                  console.log("[TED Parser] HLS metadata translated VTT path C:", translatedCues.length, "cues");
+                }
+              }
+            }
+          } catch (e) { console.warn("[TED Parser] HLS metadata translated fetch failed:", e); }
+        }
       }
 
       if (!translatedCues.length) isTranslationMissing = true;
