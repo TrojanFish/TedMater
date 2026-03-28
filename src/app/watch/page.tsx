@@ -559,6 +559,7 @@ function WatchContent() {
 
     const fetchData = async () => {
       setLoading(true);
+      setData(null); // Clear previous video data to avoid state leakage
       try {
         const uRes = await fetch("/api/auth/me");
         if (uRes.ok) { const d = await uRes.json(); setUser(d.user); }
@@ -1599,7 +1600,14 @@ export default function WatchPage() {
         <div className="w-12 h-12 border-4 border-border border-t-accent rounded-full animate-spin shadow-pop" />
       </div>
     }>
-      <WatchContent />
+      <WatchContentWithKey />
     </Suspense>
   );
+}
+
+function WatchContentWithKey() {
+  const searchParams = useSearchParams();
+  const url = searchParams.get("url") || "";
+  // Force a full re-mount when the URL changes to prevent state leakage
+  return <WatchContent key={url} />;
 }
