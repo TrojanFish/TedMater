@@ -8,7 +8,13 @@
       "Bash(npx tsc:*)",
       "Bash(curl -s \"https://html.duckduckgo.com/html/?q=site:ted.com/talks+climate+change\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36\" -H \"Accept-Language: en-US,en;q=0.9\")",
       "Bash(curl -s \"https://www.bing.com/search?q=site:ted.com/talks+climate+change&count=12\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0.0.0 Safari/537.36\" -H \"Accept-Language: en-US,en;q=0.9\")",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "WebFetch(domain:www.ted.com)",
+      "WebFetch(domain:hls.ted.com)",
+      "Bash(find E:ToDoList/src -type f \\\\\\(-name *.tsx -o -name *.ts \\\\\\))",
+      "Bash(find /e/ToDoList -type f \\\\\\(-name *.conf -o -name Dockerfile* \\\\\\))",
+      "Bash(grep -r \"Host\\\\|host\\\\|domain\\\\|SERVER_NAME\" /e/ToDoList/src --include=*.ts --include=*.tsx)",
+      "Bash(find /e/ToDoList -name *.json -o -name .git*)"
     ]
   }
 }

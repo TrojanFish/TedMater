@@ -207,7 +207,7 @@ export default function NotebookPage() {
 
   const removeSentence = useCallback((sentence: SavedSentence) => {
     setSentences(prev => {
-      const next = prev.filter(s => s.id !== sentence.id);
+      const next = prev.filter(s => !(s.id === sentence.id && (s.talkSlug || "") === (sentence.talkSlug || "")));
       localStorage.setItem("tedmaster_sentences", JSON.stringify(next));
       return next;
     });
@@ -250,8 +250,12 @@ export default function NotebookPage() {
           : g
         ).filter(g => g.entries.length > 0)
       );
+      if (user) fetch("/api/user/notes", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ talkKey: talkUrl, notes: obj }),
+      }).catch(() => {});
     } catch { /* ignore */ }
-  }, []);
+  }, [user]);
 
   /* ── export ─────────────────────────────────────────────────── */
   const exportTXT = () => {
