@@ -714,8 +714,9 @@ function WatchContent() {
   };
 
   const saveToVocab = (wordData: VocabItem) => {
+    const talkSlug = data?.slug || slugFromUrl(videoUrlParam || "");
     setVocabWords(prev => {
-      const newList = [...prev.filter(i => i.word !== wordData.word), { ...wordData, addedAt: Date.now() }];
+      const newList = [...prev.filter(i => i.word !== wordData.word), { ...wordData, addedAt: Date.now(), talkSlug }];
       localStorage.setItem("tedmaster_vocab", JSON.stringify(newList));
       return newList;
     });
@@ -723,13 +724,15 @@ function WatchContent() {
   };
 
   const saveSentence = (item: TranscriptItem, analysis: any) => {
+    const talkSlug = data?.slug || slugFromUrl(videoUrlParam || "");
     setSavedSentences(prev => {
-      const newList = [...prev.filter(i => i.id !== item.id), { 
-        id: item.id, 
-        english: item.english, 
-        translated: item.translated, 
-        analysis, 
-        addedAt: Date.now() 
+      const newList = [...prev.filter(i => i.id !== item.id), {
+        id: item.id,
+        english: item.english,
+        translated: item.translated,
+        analysis,
+        addedAt: Date.now(),
+        talkSlug,
       }];
       localStorage.setItem("tedmaster_sentences", JSON.stringify(newList));
       return newList;
@@ -812,6 +815,13 @@ function WatchContent() {
   /* ── Print styles ──────────────────────────────────────────── */
   const printStyle = `@media print { html,body{height:auto!important;overflow:visible!important;background:white!important;color:black!important} body>div{height:auto!important;overflow:visible!important} header{display:none!important} .print-hidden{display:none!important} #print-view{display:block!important} @page{margin:15mm 20mm;size:A4} }`;
 
+  // ── PDF scope filter — only items from the current talk ──────────────────
+  // Items saved before this fix have no talkSlug; include them for backward
+  // compatibility so existing users don't lose their PDF content.
+  const currentTalkSlug = data?.slug || slugFromUrl(videoUrlParam || "");
+  const printVocab = vocabWords.filter(w => !w.talkSlug || w.talkSlug === currentTalkSlug);
+  const printSentences = savedSentences.filter(s => !s.talkSlug || s.talkSlug === currentTalkSlug);
+
   return (
     <div className="h-screen overflow-hidden flex flex-col bg-background font-body selection:bg-tertiary selection:text-foreground print:h-auto print:overflow-visible">
       
@@ -835,10 +845,10 @@ function WatchContent() {
             setShowPrintModal(false);
             setTimeout(() => window.print(), 100);
           }}
-          vocabWords={vocabWords}
+          vocabWords={printVocab}
           data={data}
           analysisData={analysisData}
-          savedSentences={savedSentences}
+          savedSentences={printSentences}
           notes={notes}
         />
       )}
@@ -1391,9 +1401,9 @@ function WatchContent() {
       <PrintView
         data={data}
         printConfig={printConfig}
-        vocabWords={vocabWords}
+        vocabWords={printVocab}
         analysisData={analysisData}
-        savedSentences={savedSentences}
+        savedSentences={printSentences}
         notes={notes}
       />
 

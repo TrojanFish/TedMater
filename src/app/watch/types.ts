@@ -10,6 +10,7 @@ export interface VocabItem {
   exampleEn: string;
   exampleZh: string;
   addedAt: number;
+  talkSlug?: string;   // which TED talk this word came from (used for PDF scoping)
 }
 
 export interface SavedSentence {
@@ -18,6 +19,7 @@ export interface SavedSentence {
   translated: string;
   analysis?: any;
   addedAt: number;
+  talkSlug?: string;   // which TED talk this sentence came from (used for PDF scoping)
 }
 
 export interface TranscriptItem {
