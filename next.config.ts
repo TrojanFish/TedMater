@@ -10,7 +10,7 @@ const securityHeaders = [
     value: [
       "default-src 'self'",
       // Next.js inline scripts + HMR
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com",
       // Inline styles (Next.js emotion / tailwind)
       "style-src 'self' 'unsafe-inline'",
       // TED CDN thumbnails + video segments
@@ -18,7 +18,7 @@ const securityHeaders = [
       // HLS/MP4 from TED CDN; Web Worker blob URLs
       "media-src 'self' blob: https://*.ted.com https://*.tedcdn.com https://*.akamaihd.net",
       // HLS.js XHR to TED CDN segments + Gemini API
-      "connect-src 'self' https://*.ted.com https://*.tedcdn.com https://*.akamaihd.net https://generativelanguage.googleapis.com",
+      "connect-src 'self' https://*.ted.com https://*.tedcdn.com https://*.akamaihd.net https://generativelanguage.googleapis.com https://cloudflareinsights.com",
       // Web Workers (Whisper / HLS.js)
       "worker-src 'self' blob:",
       // Fonts
