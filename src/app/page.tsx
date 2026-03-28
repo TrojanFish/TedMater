@@ -48,15 +48,18 @@ export default function Home() {
 
   useEffect(() => {
     fetch("/api/auth/me").then(res => res.json()).then(data => {
-      if (data.user) {
-        setUser(data.user);
-        fetch("/api/user/history")
-          .then(res => res.json())
-          .then(hData => { if (Array.isArray(hData)) setHistory(hData); })
-          .catch(() => {});
-      }
+      if (data.user) setUser(data.user);
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      fetch("/api/user/history")
+        .then(res => res.json())
+        .then(hData => { if (Array.isArray(hData)) setHistory(hData); })
+        .catch(() => {});
+    }
+  }, [user]);
 
   useEffect(() => {
     fetch("/api/featured")
