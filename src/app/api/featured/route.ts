@@ -47,7 +47,7 @@ export async function GET() {
     if (!Array.isArray(rawTalks)) throw new Error("Unexpected TED page structure");
 
     const talks: FeaturedTalk[] = rawTalks
-      .filter(t => t.slug && t.title)
+      .filter(t => t.slug && t.title && !t.slug.startsWith("ted_idea_search"))
       .slice(0, 12)
       .map(t => ({
         title: String(t.title),
@@ -57,7 +57,7 @@ export async function GET() {
         duration: typeof t.duration === "number" ? t.duration : 0,
       }));
 
-    cache = { talks, expiresAt: Date.now() + 60 * 60 * 1000 };
+    cache = { talks, expiresAt: Date.now() + 2 * 60 * 60 * 1000 };
     return NextResponse.json({ talks });
   } catch (err: any) {
     console.error("[featured]", err.message);
