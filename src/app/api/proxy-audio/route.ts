@@ -6,11 +6,13 @@ export const dynamic = "force-dynamic";
 // SSRF protection — only TED CDN domains allowed (same list as proxy-m3u8 and extract-audio)
 const ALLOWED_HOSTS = [
   "hls.ted.com",
-  "tedcdn.com",
+  "tedcdn.com",      // matches *.tedcdn.com (py.tedcdn.com, pa.tedcdn.com, etc.)
   "assets.ted.com",
   "pa.tedcdn.com",
+  "py.tedcdn.com",
   "download.ted.com",
-  "www.ted.com",  // /talks/*/download endpoint
+  "www.ted.com",     // /talks/*/download endpoint
+  "akamaihd.net",   // matches tedcdnpa-a.akamaihd.net etc.
 ];
 
 function isAllowedUrl(raw: string): boolean {

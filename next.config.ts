@@ -14,11 +14,11 @@ const securityHeaders = [
       // Inline styles (Next.js emotion / tailwind)
       "style-src 'self' 'unsafe-inline'",
       // TED CDN thumbnails + video segments
-      "img-src 'self' data: blob: https://pi.tedcdn.com https://tedcdnpa-a.akamaihd.net https://tedcdnpe-a.akamaihd.net https://*.ted.com",
+      "img-src 'self' data: blob: https://*.ted.com https://*.tedcdn.com https://*.akamaihd.net",
       // HLS/MP4 from TED CDN; Web Worker blob URLs
-      "media-src 'self' blob: https://*.ted.com https://tedcdnpa-a.akamaihd.net https://tedcdnpe-a.akamaihd.net https://pa.tedcdn.com",
-      // Gemini API calls from server (server-side only, but keep permissive for edge cases)
-      "connect-src 'self' https://*.ted.com https://generativelanguage.googleapis.com",
+      "media-src 'self' blob: https://*.ted.com https://*.tedcdn.com https://*.akamaihd.net",
+      // HLS.js XHR to TED CDN segments + Gemini API
+      "connect-src 'self' https://*.ted.com https://*.tedcdn.com https://*.akamaihd.net https://generativelanguage.googleapis.com",
       // Web Workers (Whisper / HLS.js)
       "worker-src 'self' blob:",
       // Fonts
