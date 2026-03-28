@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
-  Home, BookMarked, Sparkles, MessageSquare, Search, X,
+  BookMarked, Sparkles, MessageSquare, Search, X,
   Download, Trash2, Volume2, ChevronDown, ChevronUp,
-  Sun, Moon, LogIn, LogOut, Zap, BookOpen, FileText,
-  FileSpreadsheet, GraduationCap, StickyNote, Filter
+  LogIn, LogOut, Zap, BookOpen, FileText,
+  FileSpreadsheet, GraduationCap, StickyNote, Filter, ArrowLeft
 } from "lucide-react";
 import { useApp } from "@/lib/i18n";
 import type { VocabItem, SavedSentence } from "@/app/watch/types";
@@ -37,7 +38,8 @@ interface UserInfo { email: string; credits: number }
 
 /* ── main component ───────────────────────────────────────────── */
 export default function NotebookPage() {
-  const { theme, toggleTheme, t } = useApp();
+  const { t } = useApp();
+  const router = useRouter();
 
   const [user, setUser] = useState<UserInfo | null>(null);
   const [vocabWords, setVocabWords] = useState<VocabItem[]>([]);
@@ -477,10 +479,11 @@ export default function NotebookPage() {
             )}
           </div>
 
-          {/* Theme */}
-          <button onClick={toggleTheme}
-            className="w-10 h-10 flex items-center justify-center bg-white border-2 border-border rounded-xl shadow-pop hover:scale-105 active:scale-95 transition-all">
-            {theme === "dark" ? <Sun size={17} strokeWidth={2.5} className="text-tertiary" /> : <Moon size={17} strokeWidth={2.5} className="text-foreground" />}
+          {/* Back to player */}
+          <button onClick={() => router.back()}
+            className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-border rounded-xl shadow-pop hover:scale-105 active:scale-95 transition-all text-xs font-black uppercase tracking-widest text-foreground">
+            <ArrowLeft size={15} strokeWidth={2.5} />
+            <span className="hidden sm:inline">Back</span>
           </button>
 
           {/* Auth */}
@@ -507,7 +510,7 @@ export default function NotebookPage() {
             { label: t.wordsTab, value: vocabWords.length, color: "bg-accent", icon: <BookMarked size={16} className="text-white" /> },
             { label: t.sentencesTab, value: sentences.length, color: "bg-secondary", icon: <Sparkles size={16} className="text-white" /> },
             { label: t.notesTab, value: totalNotes, color: "bg-tertiary", icon: <StickyNote size={16} className="text-white" /> },
-            { label: "Talks", value: allTalks, color: "bg-quaternary", icon: <BookOpen size={16} className="text-white" /> },
+            { label: "Studied", value: allTalks, color: "bg-quaternary", icon: <BookOpen size={16} className="text-white" /> },
           ].map((stat, i) => (
             <div key={i} className="bg-white border-2 border-border rounded-2xl shadow-pop p-4 flex items-center gap-3">
               <div className={`w-10 h-10 ${stat.color} rounded-xl border-2 border-border shadow-pop-active flex items-center justify-center shrink-0`}>
