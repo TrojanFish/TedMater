@@ -19,15 +19,20 @@ async function getUser() {
 
 // GET /api/user/vocab — return all vocab words for the logged-in user
 export async function GET() {
-  const user = await getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const user = await getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const rows = await prisma.vocabWord.findMany({
-    where: { userId: user.id },
-    orderBy: { addedAt: "asc" },
-  });
-  // Return the stored VocabItem objects directly
-  return NextResponse.json({ words: rows.map(r => r.data) });
+    const rows = await prisma.vocabWord.findMany({
+      where: { userId: user.id },
+      orderBy: { addedAt: "asc" },
+    });
+    // Return the stored VocabItem objects directly
+    return NextResponse.json({ words: rows.map(r => r.data) });
+  } catch (err) {
+    console.error("[Vocab API Error]", err);
+    return NextResponse.json({ error: "Failed to fetch vocab" }, { status: 500 });
+  }
 }
 
 // POST /api/user/vocab — upsert a vocab word

@@ -19,14 +19,19 @@ async function getUser() {
 
 // GET /api/user/sentences — return all saved sentences
 export async function GET() {
-  const user = await getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const user = await getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const rows = await prisma.userSentence.findMany({
-    where: { userId: user.id },
-    orderBy: { addedAt: "asc" },
-  });
-  return NextResponse.json({ sentences: rows.map(r => r.data) });
+    const rows = await prisma.userSentence.findMany({
+      where: { userId: user.id },
+      orderBy: { addedAt: "asc" },
+    });
+    return NextResponse.json({ sentences: rows.map(r => r.data) });
+  } catch (err) {
+    console.error("[Sentences API Error]", err);
+    return NextResponse.json({ error: "Failed to fetch sentences" }, { status: 500 });
+  }
 }
 
 // POST /api/user/sentences — upsert a saved sentence

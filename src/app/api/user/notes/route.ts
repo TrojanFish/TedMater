@@ -19,17 +19,22 @@ async function getUser() {
 
 // GET /api/user/notes?key={talkKey} — return notes for a specific talk
 export async function GET(req: NextRequest) {
-  const user = await getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const user = await getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const talkKey = req.nextUrl.searchParams.get("key");
-  if (!talkKey) return NextResponse.json({ error: "Missing key" }, { status: 400 });
+    const talkKey = req.nextUrl.searchParams.get("key");
+    if (!talkKey) return NextResponse.json({ error: "Missing key" }, { status: 400 });
 
-  const row = await prisma.talkNote.findUnique({
-    where: { userId_talkKey: { userId: user.id, talkKey } },
-  });
+    const row = await prisma.talkNote.findUnique({
+      where: { userId_talkKey: { userId: user.id, talkKey } },
+    });
 
-  return NextResponse.json({ notes: row ? row.notes : {} });
+    return NextResponse.json({ notes: row ? row.notes : {} });
+  } catch (err) {
+    console.error("[Notes API Error]", err);
+    return NextResponse.json({ error: "Failed to fetch notes" }, { status: 500 });
+  }
 }
 
 // POST /api/user/notes — upsert notes for a talk

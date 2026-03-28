@@ -13,12 +13,12 @@ const securityHeaders = [
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com",
       // Inline styles (Next.js emotion / tailwind)
       "style-src 'self' 'unsafe-inline'",
-      // TED CDN thumbnails + video segments
-      "img-src 'self' data: blob: https://*.ted.com https://*.tedcdn.com https://*.akamaihd.net",
-      // HLS/MP4 from TED CDN; Web Worker blob URLs
-      "media-src 'self' blob: https://*.ted.com https://*.tedcdn.com https://*.akamaihd.net",
-      // HLS.js XHR to TED CDN segments + Gemini API
-      "connect-src 'self' https://*.ted.com https://*.tedcdn.com https://*.akamaihd.net https://generativelanguage.googleapis.com https://cloudflareinsights.com",
+      // TED CDN, YouTube, Vimeo, Google, etc. (Allow both http/https for local/proxied environments)
+      "img-src 'self' data: blob: *.ted.com *.tedcdn.com *.akamaihd.net *.ytimg.com *.vimeocdn.com *.googleusercontent.com *.cloudfront.net",
+      // HLS/MP4 media sources
+      "media-src 'self' blob: *.ted.com *.tedcdn.com *.akamaihd.net *.vimeocdn.com",
+      // API connections (Gemini, Cloudflare, etc.)
+      "connect-src 'self' https://generativelanguage.googleapis.com https://cloudflareinsights.com *.ted.com *.tedcdn.com *.akamaihd.net",
       // Web Workers (Whisper / HLS.js)
       "worker-src 'self' blob:",
       // Fonts
