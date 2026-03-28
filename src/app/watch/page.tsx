@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Play, Pause, Settings, Loader2, Sparkles, X, Home, Download, LogIn,
-  BookMarked, Sliders,
+  BookMarked, BookOpen, Sliders,
   FileText, FileCode, Sun, Moon, Zap,
   Maximize, PictureInPicture, Volume, Volume1, Volume2, Lock, LogOut, History as HistoryIcon,
   MoreHorizontal, Globe, ChevronDown
@@ -985,6 +985,11 @@ function WatchContent() {
               title={t.wordsTab}>
               <BookMarked size={18} strokeWidth={2.5} />
             </button>
+            <Link href="/notebook"
+              className="w-10 h-10 flex items-center justify-center bg-accent/10 border-2 border-border rounded-xl shadow-pop hover:scale-105 active:scale-95 transition-all"
+              title="Full Notebook">
+              <BookOpen size={18} strokeWidth={2.5} className="text-accent" />
+            </Link>
             <button onClick={() => setShowMoreMenu(!showMoreMenu)}
               className="w-10 h-10 flex items-center justify-center bg-white border-2 border-border rounded-xl shadow-pop hover:scale-105 active:scale-95 transition-all">
               <Settings size={18} strokeWidth={2.5} className="text-foreground" />

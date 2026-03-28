@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Download, Trash2, Volume2, BookMarked, Sparkles, MessageSquare } from "lucide-react";
+import Link from "next/link";
+import { Download, Trash2, Volume2, BookMarked, Sparkles, MessageSquare, ExternalLink } from "lucide-react";
 import { useApp } from "@/lib/i18n";
 import type { VocabItem, SavedSentence } from "@/app/watch/types";
 
@@ -68,12 +69,19 @@ export default function LearningNotebook({
             </div>
             <span className="text-lg font-black uppercase tracking-tight text-foreground">Notebook</span>
           </div>
-          <button onClick={exportAll} 
-            disabled={words.length === 0 && sentences.length === 0 && noteEntries.length === 0}
-            className="w-10 h-10 flex items-center justify-center bg-white border-2 border-border rounded-full shadow-pop hover:scale-110 active:scale-95 transition-all disabled:opacity-30 disabled:shadow-none"
-            title={t.exportLabel}>
-            <Download size={18} strokeWidth={2.5} className="text-foreground" />
-          </button>
+          <div className="flex items-center gap-2">
+            <Link href="/notebook"
+              className="w-10 h-10 flex items-center justify-center bg-accent/10 border-2 border-border rounded-full shadow-pop hover:scale-110 active:scale-95 transition-all"
+              title="Open Full Notebook">
+              <ExternalLink size={16} strokeWidth={2.5} className="text-accent" />
+            </Link>
+            <button onClick={exportAll}
+              disabled={words.length === 0 && sentences.length === 0 && noteEntries.length === 0}
+              className="w-10 h-10 flex items-center justify-center bg-white border-2 border-border rounded-full shadow-pop hover:scale-110 active:scale-95 transition-all disabled:opacity-30 disabled:shadow-none"
+              title={t.exportLabel}>
+              <Download size={18} strokeWidth={2.5} className="text-foreground" />
+            </button>
+          </div>
         </div>
         
         <div className="flex p-2 gap-2 bg-background">
