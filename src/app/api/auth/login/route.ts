@@ -7,7 +7,6 @@ import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 export const dynamic = "force-dynamic";
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
-if (!JWT_SECRET) throw new Error("JWT_SECRET environment variable is not set");
 
 export async function POST(req: NextRequest) {
   if (!checkRateLimit(`login:${getClientIp(req)}`, { windowMs: 60_000, max: 10 })) {
