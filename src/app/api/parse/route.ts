@@ -108,85 +108,149 @@ export async function POST(req: NextRequest) {
 
     console.log("[TED Parser] resolved video sources — hlsUrl:", !!hlsUrl, "| mp4Url:", !!mp4Url);
 
-    // 2. Transcript Alignment
-    let englishCues: any[] = []; // Initialize englishCues here
+    // Extract slug early — needed for transcript API fallback
+    const slug = videoData.slug as string | undefined;
 
-    // Try to get transcript from transcriptData (more reliable for new videos)
-    const pageTranscript = pageProps.transcriptData?.translation;
-    if (pageTranscript && pageTranscript.paragraphs) {
-      pageTranscript.paragraphs.forEach((p: any) => {
-        if (p.cues) {
-          p.cues.forEach((c: any) => {
-            englishCues.push({
-              id: c.time.toString(),
-              startTime: c.time,           // ms — matches player's currentTime * 1000
-              endTime: c.time + (c.duration || 1000),
-              text: c.text
-            });
-          });
+    // ── Helpers ──────────────────────────────────────────────────────────────
+    /** Convert an array of TED paragraph objects → flat cue array */
+    const parasToEnglishCues = (paras: any[]): any[] =>
+      paras.flatMap((p: any) =>
+        (p.cues || []).map((c: any) => ({
+          id: String(c.time),
+          startTime: c.time,
+          endTime: c.time + (c.duration || 1000),
+          text: (c.text || "").trim(),
+        }))
+      ).filter((c: any) => c.text);
+
+    /** Parse a WebVTT string into cue objects */
+    const vttToEnglishCues = (vtt: string): any[] => {
+      const toMs = (s: string) => {
+        const parts = s.trim().replace(",", ".").split(":");
+        if (parts.length === 3)
+          return (parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseFloat(parts[2])) * 1000;
+        if (parts.length === 2)
+          return (parseInt(parts[0]) * 60 + parseFloat(parts[1])) * 1000;
+        return 0;
+      };
+      const cues: any[] = [];
+      let cur: any = null;
+      for (const line of vtt.split("\n")) {
+        if (line.includes("-->")) {
+          const [s, e] = line.split("-->");
+          cur = { startTime: toMs(s), endTime: toMs(e), text: "" };
+          cues.push(cur);
+        } else if (cur && line.trim() && !line.startsWith("WEBVTT") && !line.startsWith("NOTE") && !/^\d+$/.test(line.trim())) {
+          cur.text += (cur.text ? " " : "") + line.trim();
         }
-      });
+      }
+      return cues.filter(c => c.text);
+    };
+
+    // ── 2. English transcript — try 5 paths in order ─────────────────────────
+    let englishCues: any[] = [];
+
+    // Path 1: transcriptData.translation.paragraphs (TED classic structure)
+    const p1 = pageProps.transcriptData?.translation?.paragraphs;
+    if (p1?.length) englishCues = parasToEnglishCues(p1);
+
+    // Path 2: transcriptData.paragraphs (unwrapped — newer TED structure)
+    if (!englishCues.length) {
+      const p2 = pageProps.transcriptData?.paragraphs;
+      if (p2?.length) englishCues = parasToEnglishCues(p2);
     }
 
-    // Try to get transcript from playerData (HLS subtitles)
-    if (englishCues.length === 0) {
-      const subtitles = videoData.playerData?.resources?.hls?.subtitles || videoData.acmePlayerData?.resources?.hls?.subtitles || [];
-      const englishSub = subtitles.find((s: any) => s.language === 'en');
-      if (englishSub) {
-        try {
-          const vttRes = await fetch(englishSub.url, { signal: AbortSignal.timeout(10_000) });
-          const vttText = await vttRes.text();
-          // Basic VTT parsing (simplified for this example, full parser would be more complex)
-          const lines = vttText.split('\n');
-          let currentCue: any = null;
-          for (const line of lines) {
-            if (line.includes('-->')) {
-              // Parse VTT timestamps to milliseconds
-              const toMs = (s: string) => {
-                const parts = s.trim().split(':');
-                if (parts.length === 3) {
-                  return (parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseFloat(parts[2])) * 1000;
-                } else if (parts.length === 2) {
-                  return (parseInt(parts[0]) * 60 + parseFloat(parts[1])) * 1000;
-                }
-                return 0;
-              };
-              const [startStr, endStr] = line.split('-->');
-              const start = toMs(startStr);
-              const end = toMs(endStr);
-              currentCue = { startTime: start, endTime: end, text: '' };
-              englishCues.push(currentCue);
-            } else if (currentCue && line.trim() !== '' && !line.startsWith('WEBVTT') && !line.startsWith('NOTE')) {
-              currentCue.text += (currentCue.text ? ' ' : '') + line.trim();
-            }
-          }
-        } catch (e) {
-          console.warn("Failed to fetch or parse VTT subtitles", e);
+    // Path 3: TED transcript JSON API  →  /talks/{slug}/transcript.json?language=en
+    if (!englishCues.length && slug) {
+      try {
+        const apiRes = await fetch(
+          `https://www.ted.com/talks/${slug}/transcript.json?language=en`,
+          { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }, signal: AbortSignal.timeout(10_000) }
+        );
+        if (apiRes.ok) {
+          const apiData = await apiRes.json();
+          const p3 = apiData.paragraphs || apiData.translation?.paragraphs || [];
+          if (p3.length) englishCues = parasToEnglishCues(p3);
+          console.log("[TED Parser] transcript API path 3:", englishCues.length, "cues");
         }
+      } catch (e) { console.warn("[TED Parser] transcript API failed:", e); }
+    }
+
+    // Path 4: HLS subtitle track (.vtt)
+    if (!englishCues.length) {
+      const subtitles =
+        playerData?.resources?.hls?.subtitles ||
+        acmePlayerData?.resources?.hls?.subtitles ||
+        videoData.playerData?.resources?.hls?.subtitles || [];
+      const enSub = subtitles.find((s: any) => s.language === "en");
+      if (enSub?.url) {
+        try {
+          const vttRes = await fetch(enSub.url, { signal: AbortSignal.timeout(10_000) });
+          if (vttRes.ok) englishCues = vttToEnglishCues(await vttRes.text());
+          console.log("[TED Parser] HLS VTT path 4:", englishCues.length, "cues");
+        } catch (e) { console.warn("[TED Parser] VTT fetch failed:", e); }
       }
     }
 
+    // Path 5: Regex scan for any JSON transcript blob inside the page data
+    if (!englishCues.length) {
+      try {
+        const jsonStr = JSON.stringify(data);
+        // Look for {"time":<ms>,"text":"..."} patterns — TED cue fingerprint
+        const cueMatches = [...jsonStr.matchAll(/"time":(\d+),"(?:duration":\d+,)?"text":"([^"]+)"/g)];
+        if (cueMatches.length > 10) {
+          englishCues = cueMatches.map((m, i) => ({
+            id: String(i), startTime: parseInt(m[1]), endTime: parseInt(m[1]) + 3000, text: m[2],
+          }));
+          console.log("[TED Parser] regex scan path 5:", englishCues.length, "cues");
+        }
+      } catch { /* ignore */ }
+    }
+
+    console.log("[TED Parser] englishCues total:", englishCues.length);
+
+    // ── 3. Translated transcript ──────────────────────────────────────────────
     let translatedCues: any[] = [];
     let isTranslationMissing = false;
 
     if (targetLang && targetLang !== "en") {
+      // Path A: fetch lang-specific page and extract __NEXT_DATA__
       try {
-        const transRes = await fetch(`${url}?language=${targetLang}`, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(15_000) });
+        const transRes = await fetch(`${url}?language=${targetLang}`, {
+          headers: { "User-Agent": "Mozilla/5.0" },
+          signal: AbortSignal.timeout(15_000),
+        });
         const transHtml = await transRes.text();
         const $t = cheerio.load(transHtml);
         const transDataJson = $t("#__NEXT_DATA__").html();
         if (transDataJson) {
           const tData = JSON.parse(transDataJson);
-          const tParas = tData.props.pageProps.transcriptData?.translation?.paragraphs || [];
-          translatedCues = tParas.flatMap((p: any) => (p.cues || []));
-          if (translatedCues.length === 0) isTranslationMissing = true;
-        } else {
-          isTranslationMissing = true;
+          const tPageProps = tData.props?.pageProps;
+          const tParas =
+            tPageProps?.transcriptData?.translation?.paragraphs ||
+            tPageProps?.transcriptData?.paragraphs ||
+            [];
+          translatedCues = tParas.flatMap((p: any) => p.cues || []);
         }
-      } catch (e) { 
-        console.warn("Translation failed", e);
-        isTranslationMissing = true;
+      } catch (e) { console.warn("[TED Parser] translated page fetch failed:", e); }
+
+      // Path B: TED transcript API for the target language
+      if (!translatedCues.length && slug) {
+        try {
+          const apiRes = await fetch(
+            `https://www.ted.com/talks/${slug}/transcript.json?language=${targetLang}`,
+            { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(10_000) }
+          );
+          if (apiRes.ok) {
+            const apiData = await apiRes.json();
+            const tParas = apiData.paragraphs || apiData.translation?.paragraphs || [];
+            translatedCues = tParas.flatMap((p: any) => p.cues || []);
+            console.log("[TED Parser] translation API path B:", translatedCues.length, "cues");
+          }
+        } catch (e) { console.warn("[TED Parser] translation API failed:", e); }
       }
+
+      if (!translatedCues.length) isTranslationMissing = true;
     }
 
     const mergedSentences = englishCues.map((eCue: any, idx: number) => {
@@ -238,7 +302,7 @@ export async function POST(req: NextRequest) {
     };
 
     const youtubeId = findYoutubeId(videoData);
-    const slug = videoData.slug;
+    // slug already declared above (extracted early for transcript API)
 
     // Build alternative sources
     const transcribeSources = [];
