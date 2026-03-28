@@ -169,11 +169,69 @@ export async function POST(req: NextRequest) {
         );
         if (apiRes.ok) {
           const apiData = await apiRes.json();
-          const p3 = apiData.paragraphs || apiData.translation?.paragraphs || [];
+          const p3 =
+            apiData.paragraphs ||
+            apiData.translation?.paragraphs ||
+            apiData.talk?.transcript?.paragraphs ||
+            apiData.transcript?.paragraphs ||
+            [];
           if (p3.length) englishCues = parasToEnglishCues(p3);
           console.log("[TED Parser] transcript API path 3:", englishCues.length, "cues");
         }
       } catch (e) { console.warn("[TED Parser] transcript API failed:", e); }
+    }
+
+    // Path 3b: Fetch /talks/{slug}/transcript page — newer TED talks store cues here
+    if (!englishCues.length && slug) {
+      try {
+        const tpRes = await fetch(
+          `https://www.ted.com/talks/${slug}/transcript?language=en`,
+          {
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              "Accept-Language": "en-US,en;q=0.9",
+            },
+            signal: AbortSignal.timeout(15_000),
+          }
+        );
+        if (tpRes.ok) {
+          const tpHtml = await tpRes.text();
+          const $tp = cheerio.load(tpHtml);
+          const tpJson = $tp("#__NEXT_DATA__").html();
+          if (tpJson) {
+            const tpData = JSON.parse(tpJson);
+            const tpProps = tpData?.props?.pageProps;
+            const tpParas =
+              tpProps?.transcriptData?.translation?.paragraphs ||
+              tpProps?.transcriptData?.paragraphs ||
+              tpProps?.videoData?.transcript?.paragraphs ||
+              tpProps?.talkTranscript?.paragraphs ||
+              [];
+            if (tpParas.length) {
+              englishCues = parasToEnglishCues(tpParas);
+              console.log("[TED Parser] transcript subpage path 3b:", englishCues.length, "cues");
+            }
+          }
+        }
+      } catch (e) { console.warn("[TED Parser] transcript subpage failed:", e); }
+    }
+
+    // Path 3c: Try transcript.json without language filter (some talks only return unlocalized)
+    if (!englishCues.length && slug) {
+      try {
+        const apiRes = await fetch(
+          `https://www.ted.com/talks/${slug}/transcript.json`,
+          { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(10_000) }
+        );
+        if (apiRes.ok) {
+          const apiData = await apiRes.json();
+          const p3c = apiData.paragraphs || apiData.translation?.paragraphs || apiData.talk?.transcript?.paragraphs || [];
+          if (p3c.length) {
+            englishCues = parasToEnglishCues(p3c);
+            console.log("[TED Parser] transcript API no-lang path 3c:", englishCues.length, "cues");
+          }
+        }
+      } catch (e) { console.warn("[TED Parser] transcript.json no-lang failed:", e); }
     }
 
     // Path 4: HLS subtitle track (.vtt)

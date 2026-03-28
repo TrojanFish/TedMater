@@ -253,6 +253,8 @@ function WatchContent() {
             const ytData = await ytRes.json();
             if (ytData.transcript && ytData.transcript.length > 0) {
               console.log("[ASR] YouTube subtitles found, skipping Moonshine.");
+              const slug = data.slug || slugFromUrl(videoUrlParam || "");
+              if (slug) writeTranscriptCache(slug, ytData.transcript);
               setData({ ...data, transcript: ytData.transcript, needsTranscription: false });
               setIsTranscribing(false);
               return;
