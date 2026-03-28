@@ -38,6 +38,7 @@ export interface AnalysisResult {
 export interface ParsedData {
   title: string;
   presenter: string;
+  thumbnail?: string;
   videoUrl: string;
   downloadUrl: string;
   isHls: boolean;
@@ -56,8 +57,20 @@ export interface HistoryItem {
   videoUrl: string;
   title: string;
   presenter: string;
+  thumbnail?: string;
+  talkSlug?: string;
   progressTime: number;
   duration?: number;
+  pinned?: boolean;
+}
+
+export interface TalkMeta {
+  videoUrl: string;
+  talkSlug: string;
+  title: string;
+  presenter: string;
+  thumbnail: string;
+  savedAt: number;
 }
 
 export interface PrintConfig {

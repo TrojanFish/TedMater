@@ -48,8 +48,11 @@ model History {
   videoUrl     String
   title        String
   presenter    String
+  thumbnail    String?  // 封面图 URL
+  talkSlug     String?  // 关联 vocab/sentences/notes 的 slug
   progressTime Float    // 播放到多少秒
   duration     Float?   // 总时长
+  pinned       Boolean  @default(false) // 用户置顶标记
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt // 用于排序最近观看
 
@@ -57,6 +60,7 @@ model History {
 
   @@unique([userId, videoUrl]) // 每个用户看同一个视频只保留一条最新记录
   @@index([userId, updatedAt])
+  @@index([userId, pinned])
 }
 
 model ActivationCode {

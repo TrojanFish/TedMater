@@ -25,7 +25,7 @@ export async function GET() {
     const history = await prisma.history.findMany({
       where: { userId: user.id },
       orderBy: { updatedAt: "desc" },
-      take: 20,
+      take: 50,
     });
     return NextResponse.json(history);
   } catch (err) {
@@ -40,16 +40,15 @@ export async function POST(req: Request) {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
-    const { videoUrl, title, presenter, progressTime, duration } = body;
+    const { videoUrl, title, presenter, thumbnail, talkSlug, progressTime, duration } = body;
 
-    // Validate required fields
     if (typeof videoUrl !== "string" || !videoUrl.includes("ted.com/talks/")) {
       return NextResponse.json({ error: "Invalid videoUrl" }, { status: 400 });
     }
-    // Sanitize strings (strip to plain text, no HTML)
     const safeTitle = typeof title === "string" ? title.slice(0, 300).replace(/[<>]/g, "") : "Unknown TED Talk";
     const safePresenter = typeof presenter === "string" ? presenter.slice(0, 200).replace(/[<>]/g, "") : "Unknown";
-    // Validate numbers: must be finite, non-negative
+    const safeThumbnail = typeof thumbnail === "string" ? thumbnail.slice(0, 500) : null;
+    const safeTalkSlug = typeof talkSlug === "string" ? talkSlug.slice(0, 200).replace(/[^a-z0-9_-]/gi, "") : null;
     const safeProgress = Number.isFinite(progressTime) && progressTime >= 0 ? progressTime : 0;
     const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : null;
 
@@ -58,6 +57,8 @@ export async function POST(req: Request) {
       update: {
         title: safeTitle,
         presenter: safePresenter,
+        ...(safeThumbnail !== null && { thumbnail: safeThumbnail }),
+        ...(safeTalkSlug !== null && { talkSlug: safeTalkSlug }),
         progressTime: safeProgress,
         duration: safeDuration,
         updatedAt: new Date(),
@@ -67,12 +68,37 @@ export async function POST(req: Request) {
         videoUrl,
         title: safeTitle,
         presenter: safePresenter,
+        thumbnail: safeThumbnail,
+        talkSlug: safeTalkSlug,
         progressTime: safeProgress,
         duration: safeDuration,
       },
     });
 
     return NextResponse.json({ success: true, record });
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json({ error: "Update failed" }, { status: 500 });
+  }
+}
+
+// PATCH — toggle pinned for a single history entry
+export async function PATCH(req: Request) {
+  try {
+    const user = await auth();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { videoUrl, pinned } = await req.json();
+    if (typeof videoUrl !== "string") {
+      return NextResponse.json({ error: "Invalid videoUrl" }, { status: 400 });
+    }
+
+    const record = await prisma.history.updateMany({
+      where: { userId: user.id, videoUrl },
+      data: { pinned: Boolean(pinned) },
+    });
+
+    return NextResponse.json({ success: true, count: record.count });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: "Update failed" }, { status: 500 });

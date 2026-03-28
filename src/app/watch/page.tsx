@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Play, Pause, Settings, Loader2, Sparkles, X, Home, Download, LogIn,
-  BookMarked, BookOpen, Sliders,
+  BookMarked, BookOpen, Sliders, Star,
   FileText, FileCode, Sun, Moon, Zap,
   Maximize, PictureInPicture, Volume, Volume1, Volume2, Lock, LogOut, History as HistoryIcon,
   MoreHorizontal, Globe, ChevronDown
@@ -128,6 +128,7 @@ function WatchContent() {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isLoadingSubtitles, setIsLoadingSubtitles] = useState(false);
   const [isAiTranslating, setIsAiTranslating] = useState(false);
+  const [isPinned, setIsPinned] = useState(false);
   const workerRef = useRef<Worker | null>(null);
 
   useEffect(() => {
@@ -593,6 +594,27 @@ function WatchContent() {
         }
 
         setData(result);
+
+        // Write talk meta for Talks tab (thumbnail, title, presenter, slug)
+        try {
+          const metaSlug = result.slug || slugFromUrl(videoUrlParam!);
+          localStorage.setItem(`tm_talk_meta_${metaSlug}`, JSON.stringify({
+            videoUrl: videoUrlParam,
+            talkSlug: metaSlug,
+            title: result.title || "",
+            presenter: result.presenter || "",
+            thumbnail: result.thumbnail || "",
+            savedAt: Date.now(),
+          }));
+        } catch { /* quota exceeded */ }
+
+        // Load pin state
+        try {
+          const metaSlug = result.slug || slugFromUrl(videoUrlParam!);
+          const pinned: string[] = JSON.parse(localStorage.getItem("tm_pinned_talks") || "[]");
+          setIsPinned(pinned.includes(metaSlug));
+        } catch { /* ignore */ }
+
       } catch { router.push("/"); }
       finally { setLoading(false); }
     };
@@ -717,6 +739,8 @@ function WatchContent() {
              videoUrl: videoUrlParam,
              title: data.title,
              presenter: data.presenter,
+             thumbnail: data.thumbnail || "",
+             talkSlug: data.slug || slugFromUrl(videoUrlParam || ""),
              progressTime: video.currentTime,
              duration: video.duration
            }),
@@ -782,6 +806,8 @@ function WatchContent() {
              videoUrl: videoUrlParam,
              title: data.title,
              presenter: data.presenter,
+             thumbnail: data.thumbnail || "",
+             talkSlug: data.slug || slugFromUrl(videoUrlParam || ""),
              progressTime: videoRef.current.currentTime,
              duration: videoRef.current.duration
            })
@@ -829,6 +855,26 @@ function WatchContent() {
         body: JSON.stringify({ sentenceKey, data: sentence }),
       }).catch(() => {});
     }
+  };
+
+  const handleTogglePin = () => {
+    if (!data) return;
+    const slug = data.slug || slugFromUrl(videoUrlParam || "");
+    const next = !isPinned;
+    setIsPinned(next);
+    try {
+      const pinned: string[] = JSON.parse(localStorage.getItem("tm_pinned_talks") || "[]");
+      const updated = next ? [...pinned.filter(s => s !== slug), slug] : pinned.filter(s => s !== slug);
+      localStorage.setItem("tm_pinned_talks", JSON.stringify(updated));
+    } catch { /* ignore */ }
+    if (user && videoUrlParam) {
+      fetch("/api/user/history", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videoUrl: videoUrlParam, pinned: next }),
+      }).catch(() => {});
+    }
+    showToast(next ? (lang === "en" ? "Talk pinned to Notebook" : "已置顶到 Notebook") : (lang === "en" ? "Pin removed" : "已取消置顶"), "info");
   };
 
   const handleSaveNote = (id: number) => {
@@ -990,6 +1036,16 @@ function WatchContent() {
               title="Full Notebook">
               <BookOpen size={18} strokeWidth={2.5} className="text-accent" />
             </Link>
+            {data && (
+              <button onClick={handleTogglePin}
+                className={`w-10 h-10 flex items-center justify-center border-2 border-border rounded-xl shadow-pop hover:scale-105 active:scale-95 transition-all
+                  ${isPinned ? "bg-tertiary" : "bg-white"}`}
+                title={isPinned ? (lang === "en" ? "Unpin talk" : "取消置顶") : (lang === "en" ? "Pin to Notebook" : "置顶到 Notebook")}>
+                <Star size={17} strokeWidth={2.5}
+                  className={isPinned ? "text-white fill-white" : "text-foreground"}
+                />
+              </button>
+            )}
             <button onClick={() => setShowMoreMenu(!showMoreMenu)}
               className="w-10 h-10 flex items-center justify-center bg-white border-2 border-border rounded-xl shadow-pop hover:scale-105 active:scale-95 transition-all">
               <Settings size={18} strokeWidth={2.5} className="text-foreground" />

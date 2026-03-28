@@ -7,10 +7,11 @@ import {
   BookMarked, Sparkles, MessageSquare, Search, X,
   Download, Trash2, Volume2, ChevronDown, ChevronUp,
   LogIn, LogOut, Zap, BookOpen, FileText,
-  FileSpreadsheet, GraduationCap, StickyNote, Filter, ArrowLeft
+  FileSpreadsheet, GraduationCap, StickyNote, Filter, ArrowLeft,
+  Star, Play, Clock
 } from "lucide-react";
 import { useApp } from "@/lib/i18n";
-import type { VocabItem, SavedSentence } from "@/app/watch/types";
+import type { VocabItem, SavedSentence, HistoryItem, TalkMeta } from "@/app/watch/types";
 
 /* ── helpers ──────────────────────────────────────────────────── */
 const slugFromUrl = (url: string): string => {
@@ -27,11 +28,31 @@ const speak = (word: string) => {
   speechSynthesis.speak(u);
 };
 
+const fmtTime = (sec: number): string => {
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+};
+
 /* ── types ────────────────────────────────────────────────────── */
 interface NoteGroup {
   talkSlug: string;
   talkUrl: string;
   entries: { id: string; text: string }[];
+}
+
+interface TalkCard {
+  talkSlug: string;
+  videoUrl: string;
+  title: string;
+  presenter: string;
+  thumbnail: string;
+  progressTime: number;
+  duration: number;
+  pinned: boolean;
+  wordCount: number;
+  sentenceCount: number;
+  noteCount: number;
+  lastActivity: number;
 }
 
 interface UserInfo { email: string; credits: number }
@@ -46,13 +67,15 @@ export default function NotebookPage() {
   const [sentences, setSentences] = useState<SavedSentence[]>([]);
   const [noteGroups, setNoteGroups] = useState<NoteGroup[]>([]);
 
-  const [activeTab, setActiveTab] = useState<"vocab" | "sentences" | "notes">("vocab");
+  const [activeTab, setActiveTab] = useState<"vocab" | "sentences" | "notes" | "talks">("vocab");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest" | "az">("newest");
   const [groupByTalk, setGroupByTalk] = useState(true);
   const [expandedWords, setExpandedWords] = useState<Set<string>>(new Set());
   const [expandedSents, setExpandedSents] = useState<Set<string | number>>(new Set());
   const [showExport, setShowExport] = useState(false);
+  const [pinnedSlugs, setPinnedSlugs] = useState<Set<string>>(new Set());
+  const [historyMap, setHistoryMap] = useState<Map<string, HistoryItem>>(new Map());
 
   /* ── load from localStorage ───────────────────────────────── */
   useEffect(() => {
@@ -63,6 +86,12 @@ export default function NotebookPage() {
     try {
       const raw = localStorage.getItem("tedmaster_sentences");
       if (raw) setSentences(JSON.parse(raw));
+    } catch { /* ignore */ }
+
+    // Load pinned slugs
+    try {
+      const pinned: string[] = JSON.parse(localStorage.getItem("tm_pinned_talks") || "[]");
+      setPinnedSlugs(new Set(pinned));
     } catch { /* ignore */ }
 
     // Scan all note keys
@@ -95,9 +124,10 @@ export default function NotebookPage() {
         const { user: u } = await res.json();
         setUser(u);
 
-        const [vRes, sRes] = await Promise.all([
+        const [vRes, sRes, hRes] = await Promise.all([
           fetch("/api/user/vocab"),
           fetch("/api/user/sentences"),
+          fetch("/api/user/history"),
         ]);
         if (vRes.ok) {
           const { words: dbWords }: { words: VocabItem[] } = await vRes.json();
@@ -118,6 +148,24 @@ export default function NotebookPage() {
             localStorage.setItem("tedmaster_sentences", JSON.stringify(merged));
             return merged;
           });
+        }
+        if (hRes.ok) {
+          const histArr: HistoryItem[] = await hRes.json();
+          const map = new Map<string, HistoryItem>();
+          histArr.forEach(h => {
+            const slug = h.talkSlug || slugFromUrl(h.videoUrl);
+            map.set(slug, h);
+          });
+          setHistoryMap(map);
+          // Merge DB pinned state into localStorage
+          const dbPinned = histArr.filter(h => h.pinned).map(h => h.talkSlug || slugFromUrl(h.videoUrl));
+          if (dbPinned.length > 0) {
+            setPinnedSlugs(prev => {
+              const next = new Set([...prev, ...dbPinned]);
+              localStorage.setItem("tm_pinned_talks", JSON.stringify([...next]));
+              return next;
+            });
+          }
         }
       } catch { /* ignore */ }
     })();
@@ -150,6 +198,22 @@ export default function NotebookPage() {
       }).catch(() => {});
     }
   }, [user]);
+
+  const togglePin = useCallback((slug: string, videoUrl: string) => {
+    setPinnedSlugs(prev => {
+      const next = new Set(prev);
+      next.has(slug) ? next.delete(slug) : next.add(slug);
+      localStorage.setItem("tm_pinned_talks", JSON.stringify([...next]));
+      return next;
+    });
+    if (user) {
+      fetch("/api/user/history", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videoUrl, pinned: !pinnedSlugs.has(slug) }),
+      }).catch(() => {});
+    }
+  }, [user, pinnedSlugs]);
 
   const removeNote = useCallback((talkUrl: string, noteId: string) => {
     const key = `tm_notes_${talkUrl}`;
@@ -245,6 +309,57 @@ export default function NotebookPage() {
       .map(g => ({ ...g, entries: g.entries.filter(e => e.text.toLowerCase().includes(q)) }))
       .filter(g => g.entries.length > 0);
   }, [noteGroups, q]);
+
+  /* ── talk cards ─────────────────────────────────────────────── */
+  const talkCards = useMemo((): TalkCard[] => {
+    const slugSet = new Set<string>();
+    vocabWords.forEach(w => w.talkSlug && slugSet.add(w.talkSlug));
+    sentences.forEach(s => s.talkSlug && slugSet.add(s.talkSlug));
+    noteGroups.forEach(g => g.talkSlug && slugSet.add(g.talkSlug));
+    pinnedSlugs.forEach(s => slugSet.add(s));
+
+    const cards: TalkCard[] = [];
+    slugSet.forEach(slug => {
+      // Load metadata from localStorage (written by watch page on every visit)
+      let meta: Partial<TalkMeta> = {};
+      try {
+        const raw = localStorage.getItem(`tm_talk_meta_${slug}`);
+        if (raw) meta = JSON.parse(raw);
+      } catch { /* ignore */ }
+
+      const hist = historyMap.get(slug);
+      if (!meta.videoUrl && !hist?.videoUrl) return; // no URL = can't navigate
+
+      const wordList = vocabWords.filter(w => w.talkSlug === slug);
+      const sentList = sentences.filter(s => s.talkSlug === slug);
+      const noteGroup = noteGroups.find(g => g.talkSlug === slug);
+      const lastActivity = Math.max(
+        0,
+        ...wordList.map(w => w.addedAt),
+        ...sentList.map(s => s.addedAt),
+      );
+
+      cards.push({
+        talkSlug: slug,
+        videoUrl: meta.videoUrl || hist?.videoUrl || "",
+        title: meta.title || hist?.title || slugToTitle(slug),
+        presenter: meta.presenter || hist?.presenter || "",
+        thumbnail: meta.thumbnail || hist?.thumbnail || "",
+        progressTime: hist?.progressTime || 0,
+        duration: hist?.duration || 0,
+        pinned: pinnedSlugs.has(slug),
+        wordCount: wordList.length,
+        sentenceCount: sentList.length,
+        noteCount: noteGroup?.entries.length || 0,
+        lastActivity,
+      });
+    });
+
+    return cards.sort((a, b) => {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+      return b.lastActivity - a.lastActivity;
+    });
+  }, [vocabWords, sentences, noteGroups, historyMap, pinnedSlugs]);
 
   /* ── grouping ────────────────────────────────────────────────── */
   function groupBySlug<T extends { talkSlug?: string }>(items: T[]): Map<string, T[]> {
@@ -507,12 +622,13 @@ export default function NotebookPage() {
       <div className="px-4 sm:px-8 pt-6 pb-2">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: t.wordsTab, value: vocabWords.length, color: "bg-accent", icon: <BookMarked size={16} className="text-white" /> },
-            { label: t.sentencesTab, value: sentences.length, color: "bg-secondary", icon: <Sparkles size={16} className="text-white" /> },
-            { label: t.notesTab, value: totalNotes, color: "bg-tertiary", icon: <StickyNote size={16} className="text-white" /> },
-            { label: "Studied", value: allTalks, color: "bg-quaternary", icon: <BookOpen size={16} className="text-white" /> },
+            { label: t.wordsTab, value: vocabWords.length, color: "bg-accent", icon: <BookMarked size={16} className="text-white" />, tab: "vocab" as const },
+            { label: t.sentencesTab, value: sentences.length, color: "bg-secondary", icon: <Sparkles size={16} className="text-white" />, tab: "sentences" as const },
+            { label: t.notesTab, value: totalNotes, color: "bg-tertiary", icon: <StickyNote size={16} className="text-white" />, tab: "notes" as const },
+            { label: "Studied", value: allTalks, color: "bg-quaternary", icon: <BookOpen size={16} className="text-white" />, tab: "talks" as const },
           ].map((stat, i) => (
-            <div key={i} className="bg-white border-2 border-border rounded-2xl shadow-pop p-4 flex items-center gap-3">
+            <div key={i} onClick={() => stat.tab && setActiveTab(stat.tab)}
+              className={`bg-white border-2 border-border rounded-2xl shadow-pop p-4 flex items-center gap-3 ${stat.tab ? "cursor-pointer hover:shadow-pop-hover hover:-translate-y-0.5 transition-all" : ""}`}>
               <div className={`w-10 h-10 ${stat.color} rounded-xl border-2 border-border shadow-pop-active flex items-center justify-center shrink-0`}>
                 {stat.icon}
               </div>
@@ -566,6 +682,7 @@ export default function NotebookPage() {
             { id: "vocab", label: t.wordsTab, count: filteredWords.length, color: "bg-accent" },
             { id: "sentences", label: t.sentencesTab, count: filteredSents.length, color: "bg-secondary" },
             { id: "notes", label: t.notesTab, count: filteredNoteGroups.reduce((a, g) => a + g.entries.length, 0), color: "bg-tertiary" },
+            { id: "talks", label: "Talks", count: talkCards.length, color: "bg-quaternary" },
           ] as const).map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all
@@ -654,6 +771,106 @@ export default function NotebookPage() {
                 </div>
               </div>
             ))
+          )
+        )}
+
+        {/* Talks */}
+        {activeTab === "talks" && (
+          talkCards.length === 0 ? (
+            <EmptyState icon={<BookOpen size={32} />} text={"No talks yet.\nSave a word or sentence while watching to collect a talk."} />
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {talkCards.map(card => {
+                const progress = card.duration > 0 ? Math.min(100, (card.progressTime / card.duration) * 100) : 0;
+                const remaining = card.duration > 0 ? Math.max(0, card.duration - card.progressTime) : 0;
+                return (
+                  <div key={card.talkSlug}
+                    className={`bg-white border-2 border-border rounded-2xl shadow-pop overflow-hidden flex flex-col transition-all hover:shadow-pop-hover hover:-translate-y-0.5
+                      ${card.pinned ? "ring-2 ring-tertiary ring-offset-2" : ""}`}>
+                    {/* Thumbnail */}
+                    <div className="relative aspect-video bg-muted overflow-hidden">
+                      {card.thumbnail ? (
+                        <img src={card.thumbnail} alt={card.title}
+                          className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Zap size={32} className="text-accent/30" />
+                        </div>
+                      )}
+                      {/* Progress bar overlay */}
+                      {progress > 0 && (
+                        <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-black/30">
+                          <div className="h-full bg-accent transition-all" style={{ width: `${progress}%` }} />
+                        </div>
+                      )}
+                      {/* Pin badge */}
+                      {card.pinned && (
+                        <div className="absolute top-2 right-2 w-7 h-7 bg-tertiary border-2 border-border rounded-lg flex items-center justify-center shadow-pop-active">
+                          <Star size={12} className="text-white fill-white" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Body */}
+                    <div className="flex-1 p-4 flex flex-col gap-3">
+                      <div>
+                        <h3 className="font-black text-sm text-foreground leading-snug line-clamp-2">{card.title}</h3>
+                        {card.presenter && (
+                          <p className="text-[11px] font-bold text-muted-foreground mt-0.5 uppercase tracking-wide">{card.presenter}</p>
+                        )}
+                      </div>
+
+                      {/* Progress info */}
+                      {card.duration > 0 && (
+                        <div className="flex items-center gap-2 text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                          <Clock size={11} strokeWidth={2.5} />
+                          <span>{Math.round(progress)}%</span>
+                          {remaining > 0 && <span className="text-muted-foreground/60">· {fmtTime(remaining)} left</span>}
+                        </div>
+                      )}
+
+                      {/* Content counts */}
+                      <div className="flex items-center gap-3">
+                        {card.wordCount > 0 && (
+                          <button onClick={() => { setActiveTab("vocab"); setSearchQuery(card.talkSlug); }}
+                            className="flex items-center gap-1.5 text-[10px] font-black text-accent hover:underline">
+                            <BookMarked size={11} />{card.wordCount} {card.wordCount === 1 ? "word" : "words"}
+                          </button>
+                        )}
+                        {card.sentenceCount > 0 && (
+                          <button onClick={() => { setActiveTab("sentences"); setSearchQuery(card.talkSlug); }}
+                            className="flex items-center gap-1.5 text-[10px] font-black text-secondary hover:underline">
+                            <Sparkles size={11} />{card.sentenceCount} {card.sentenceCount === 1 ? "sentence" : "sentences"}
+                          </button>
+                        )}
+                        {card.noteCount > 0 && (
+                          <button onClick={() => { setActiveTab("notes"); setSearchQuery(card.talkSlug); }}
+                            className="flex items-center gap-1.5 text-[10px] font-black text-quaternary hover:underline">
+                            <MessageSquare size={11} />{card.noteCount} {card.noteCount === 1 ? "note" : "notes"}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 mt-auto pt-2 border-t border-dashed border-border/20">
+                        <Link href={`/watch?url=${encodeURIComponent(card.videoUrl)}${card.progressTime > 5 ? `&t=${Math.floor(card.progressTime)}` : ""}`}
+                          className="flex-1 flex items-center justify-center gap-2 py-2 bg-accent border-2 border-border rounded-xl shadow-pop-active text-xs font-black text-white uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all">
+                          <Play size={12} fill="currentColor" />
+                          {card.progressTime > 5 ? "Continue" : "Watch"}
+                        </Link>
+                        <button onClick={() => togglePin(card.talkSlug, card.videoUrl)}
+                          className={`w-10 h-10 flex items-center justify-center border-2 border-border rounded-xl shadow-pop-active transition-all hover:scale-105 active:scale-95
+                            ${card.pinned ? "bg-tertiary" : "bg-white"}`}
+                          title={card.pinned ? "Unpin" : "Pin to top"}>
+                          <Star size={14} strokeWidth={2.5}
+                            className={card.pinned ? "text-white fill-white" : "text-foreground"} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )
         )}
       </main>
