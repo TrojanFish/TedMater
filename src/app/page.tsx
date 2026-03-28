@@ -275,7 +275,7 @@ export default function Home() {
               <div className="flex-1 h-1 bg-border/10 rounded-full" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {history.map((hItem, idx) => {
+              {history.slice(0, 6).map((hItem, idx) => {
                 const pct = hItem.duration ? Math.min(100, (hItem.progressTime / hItem.duration) * 100) : 0;
                 return (
                   <button key={hItem.id}
