@@ -836,7 +836,7 @@ function WatchContent() {
   const printStyle = `@media print { html,body{height:auto!important;overflow:visible!important;background:white!important;color:black!important} body>div,#__next>div{height:auto!important;overflow:visible!important} .print-hidden{display:none!important} #print-view{display:block!important} @page{margin:15mm 20mm;size:A4} }`;
 
   return (
-    <div className="min-h-screen flex flex-col bg-background font-body selection:bg-tertiary selection:text-foreground overflow-x-hidden">
+    <div className="h-screen overflow-hidden flex flex-col bg-background font-body selection:bg-tertiary selection:text-foreground">
       
       {/* ── Background Decorations ────────────────────────────── */}
       <div className="fixed inset-0 pointer-events-none z-0">
@@ -1009,11 +1009,10 @@ function WatchContent() {
         </div>
       )}
 
-      <main className="flex-1 flex flex-col lg:flex-row gap-6 p-4 sm:p-8 relative z-10 
-        lg:h-[calc(100vh-140px)] lg:overflow-hidden print-hidden">
+      <main className="flex-1 min-h-0 flex flex-col lg:flex-row gap-6 p-4 sm:p-8 relative z-10 overflow-hidden print-hidden">
 
         {/* ── Video player ─────────────────────────────────────── */}
-        <section className="flex-[3] flex flex-col gap-4 min-w-0 h-full sticky top-24 lg:static z-30 bg-background/50 backdrop-blur-sm lg:bg-transparent lg:backdrop-blur-none">
+        <section className="shrink-0 lg:flex-[3] lg:shrink flex flex-col gap-4 min-w-0">
           <div className="card-sticker bg-black p-0 overflow-hidden shadow-pop-lg h-full active:shadow-pop hover:transform-none animate-in fade-in slide-in-from-left-8 duration-500">
             {/* Video */}
             <div className="aspect-video relative flex items-center justify-center bg-black">
@@ -1209,7 +1208,7 @@ function WatchContent() {
         </section>
 
         {/* ── Transcript panel ──────────────────────────────────── */}
-        <section className="flex-[2] flex flex-col gap-4 min-w-0 h-[60vh] lg:h-full overflow-hidden">
+        <section className="flex-1 min-h-0 lg:flex-[2] flex flex-col gap-4 min-w-0 overflow-hidden">
           <div className="card-sticker bg-white flex flex-col p-0 overflow-hidden shadow-pop-lg h-full hover:transform-none animate-in fade-in slide-in-from-right-8 duration-500 delay-100">
             <div className="px-6 py-4 border-b-2 border-border flex items-center justify-between bg-white sticky top-0 z-20">
               <div className="flex items-center gap-3">
@@ -1242,7 +1241,7 @@ function WatchContent() {
                 </div>
             </div>
 
-            <div ref={transcriptScrollRef} className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-background/50">
+            <div ref={transcriptScrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 custom-scrollbar bg-background/50">
               {data && data.transcript && data.transcript.length > 0 ? (
                 <div style={{ height: rowVirtualizer.getTotalSize() || 500, position: "relative", width: "100%" }}>
                   {rowVirtualizer.getVirtualItems().map(vRow => {
