@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
 
     const html = await response.text();
     const $ = cheerio.load(html);
+    const ogImage = $('meta[property="og:image"]').attr('content');
     const nextDataJson = $("#__NEXT_DATA__").html();
 
     if (!nextDataJson) {
@@ -112,6 +113,13 @@ export async function POST(req: NextRequest) {
     const slug = videoData.slug as string | undefined;
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+    /** Pick the best thumbnail from a primaryImageSet array */
+    const pickThumbnail = (primaryImageSet: any[]): string => {
+      if (!Array.isArray(primaryImageSet) || primaryImageSet.length === 0) return "";
+      const preferred = primaryImageSet.find(img => img.aspectRatioName === "16x9");
+      return (preferred ?? primaryImageSet[0])?.url ?? "";
+    };
+
     /** Convert an array of TED paragraph objects → flat cue array */
     const parasToEnglishCues = (paras: any[]): any[] =>
       paras.flatMap((p: any) =>
@@ -434,7 +442,13 @@ export async function POST(req: NextRequest) {
       title: videoData.title,
       presenter: videoData.presenterDisplayName || videoData.presenter,
       description: videoData.description,
-      thumbnail: videoData.playerData?.thumb || videoData.thumb || "",
+      thumbnail: (typeof playerData === 'object' ? playerData?.thumb : null) || 
+                videoData.thumb || 
+                videoData.image?.url || 
+                videoData.heroImage?.url || 
+                pickThumbnail(videoData.primaryImageSet || []) || 
+                ogImage || 
+                "",
       videoUrl: finalVideoUrl,
       hlsUrl: hlsUrl,   // raw CDN URL for server-side audio extraction
       audioUrl: mp4Url ? `/api/proxy-audio?url=${encodeURIComponent(mp4Url)}` : null,

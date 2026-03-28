@@ -57,7 +57,7 @@ export async function POST(req: Request) {
       update: {
         title: safeTitle,
         presenter: safePresenter,
-        ...(safeThumbnail !== null && { thumbnail: safeThumbnail }),
+        ...(safeThumbnail && { thumbnail: safeThumbnail }),
         ...(safeTalkSlug !== null && { talkSlug: safeTalkSlug }),
         progressTime: safeProgress,
         duration: safeDuration,

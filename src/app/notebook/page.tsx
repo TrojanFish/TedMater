@@ -793,8 +793,11 @@ export default function NotebookPage() {
                         <img src={card.thumbnail} alt={card.title}
                           className="w-full h-full object-cover" />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Zap size={32} className="text-accent/30" />
+                        <div className="w-full h-full flex flex-col items-center justify-center bg-accent/5 p-4 text-center">
+                          <Zap size={32} className="text-accent/20 mb-2" />
+                          <p className="text-[10px] font-black text-accent/40 uppercase tracking-tighter px-4 line-clamp-2">
+                             {card.title}
+                          </p>
                         </div>
                       )}
                       {/* Progress bar overlay */}
