@@ -124,10 +124,11 @@ export default function NotebookPage() {
         const { user: u } = await res.json();
         setUser(u);
 
-        const [vRes, sRes, hRes] = await Promise.all([
+        const [vRes, sRes, hRes, nRes] = await Promise.all([
           fetch("/api/user/vocab"),
           fetch("/api/user/sentences"),
           fetch("/api/user/history"),
+          fetch("/api/user/notes"),
         ]);
         if (vRes.ok) {
           const { words: dbWords }: { words: VocabItem[] } = await vRes.json();
@@ -147,6 +148,26 @@ export default function NotebookPage() {
             const merged = Array.from(map.values());
             localStorage.setItem("tedmaster_sentences", JSON.stringify(merged));
             return merged;
+          });
+        }
+        if (nRes?.ok) {
+          const { allNotes }: { allNotes: { talkKey: string; notes: Record<string, string> }[] } = await nRes.json();
+          setNoteGroups(prev => {
+            const map = new Map(prev.map(g => [g.talkUrl, g]));
+            allNotes.forEach(({ talkKey, notes }) => {
+              const entries = Object.entries(notes)
+                .filter(([, v]) => v?.trim())
+                .map(([id, text]) => ({ id, text }));
+              if (entries.length > 0) {
+                map.set(talkKey, { 
+                  talkSlug: slugFromUrl(talkKey), 
+                  talkUrl: talkKey, 
+                  entries 
+                });
+                localStorage.setItem(`tm_notes_${talkKey}`, JSON.stringify(notes));
+              }
+            });
+            return Array.from(map.values());
           });
         }
         if (hRes.ok) {

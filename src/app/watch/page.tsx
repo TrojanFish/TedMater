@@ -638,9 +638,10 @@ function WatchContent() {
 
     (async () => {
       try {
-        const [vRes, sRes] = await Promise.all([
+        const [vRes, sRes, nRes] = await Promise.all([
           fetch("/api/user/vocab"),
           fetch("/api/user/sentences"),
+          fetch(`/api/user/notes?key=${encodeURIComponent(videoUrlParam || "")}`),
         ]);
         if (vRes.ok) {
           const { words: dbWords } = await vRes.json();
@@ -672,6 +673,14 @@ function WatchContent() {
             });
             const merged = [...dbSentences, ...localOnly];
             localStorage.setItem("tedmaster_sentences", JSON.stringify(merged));
+            return merged;
+          });
+        }
+        if (nRes?.ok) {
+          const { notes: dbNotes } = await nRes.json();
+          setNotes(prev => {
+            const merged = { ...prev, ...dbNotes };
+            localStorage.setItem(`tm_notes_${videoUrlParam}`, JSON.stringify(merged));
             return merged;
           });
         }

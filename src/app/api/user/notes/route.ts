@@ -17,20 +17,29 @@ async function getUser() {
   } catch { return null; }
 }
 
-// GET /api/user/notes?key={talkKey} — return notes for a specific talk
+// GET /api/user/notes — return notes (all if no key provided, or for a specific talk)
 export async function GET(req: NextRequest) {
   try {
     const user = await getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const talkKey = req.nextUrl.searchParams.get("key");
-    if (!talkKey) return NextResponse.json({ error: "Missing key" }, { status: 400 });
 
-    const row = await prisma.talkNote.findUnique({
-      where: { userId_talkKey: { userId: user.id, talkKey } },
-    });
-
-    return NextResponse.json({ notes: row ? row.notes : {} });
+    if (talkKey) {
+      const row = await prisma.talkNote.findUnique({
+        where: { userId_talkKey: { userId: user.id, talkKey } },
+      });
+      return NextResponse.json({ notes: row ? row.notes : {} });
+    } else {
+      const rows = await prisma.talkNote.findMany({
+        where: { userId: user.id },
+      });
+      const allNotes = rows.map(r => ({
+        talkKey: r.talkKey,
+        notes: r.notes
+      }));
+      return NextResponse.json({ allNotes });
+    }
   } catch (err) {
     console.error("[Notes API Error]", err);
     return NextResponse.json({ error: "Failed to fetch notes" }, { status: 500 });
