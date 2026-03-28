@@ -110,8 +110,8 @@ export default function NotebookPage() {
         if (sRes.ok) {
           const { sentences: dbSents }: { sentences: SavedSentence[] } = await sRes.json();
           setSentences(prev => {
-            const map = new Map(prev.map(s => [String(s.id), s]));
-            dbSents.forEach((s: SavedSentence) => map.set(String(s.id), s));
+            const map = new Map(prev.map(s => [`${s.talkSlug || ""}:${s.id}`, s]));
+            dbSents.forEach((s: SavedSentence) => map.set(`${s.talkSlug || ""}:${s.id}`, s));
             const merged = Array.from(map.values());
             localStorage.setItem("tedmaster_sentences", JSON.stringify(merged));
             return merged;
@@ -134,16 +134,19 @@ export default function NotebookPage() {
     }).catch(() => {});
   }, [user]);
 
-  const removeSentence = useCallback((id: string | number) => {
+  const removeSentence = useCallback((sentence: SavedSentence) => {
     setSentences(prev => {
-      const next = prev.filter(s => s.id !== id);
+      const next = prev.filter(s => s.id !== sentence.id);
       localStorage.setItem("tedmaster_sentences", JSON.stringify(next));
       return next;
     });
-    if (user) fetch("/api/user/sentences", {
-      method: "DELETE", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sentenceKey: String(id) }),
-    }).catch(() => {});
+    if (user) {
+      const sentenceKey = `${sentence.talkSlug || ""}:${sentence.id}`;
+      fetch("/api/user/sentences", {
+        method: "DELETE", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sentenceKey }),
+      }).catch(() => {});
+    }
   }, [user]);
 
   const removeNote = useCallback((talkUrl: string, noteId: string) => {
@@ -378,7 +381,7 @@ export default function NotebookPage() {
                 <p className="text-xs text-muted-foreground mt-1 italic border-l-2 border-accent pl-2">{item.translated}</p>
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                <button onClick={() => removeSentence(item.id)}
+                <button onClick={() => removeSentence(item)}
                   className="w-7 h-7 flex items-center justify-center rounded-lg text-secondary/50 hover:text-secondary hover:bg-secondary/10 transition-colors">
                   <Trash2 size={13} strokeWidth={2.5} />
                 </button>

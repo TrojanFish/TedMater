@@ -639,7 +639,7 @@ function WatchContent() {
             const dbSet = new Set(dbSentences.map((s: any) => `${s.talkSlug || ""}:${s.id}`));
             const localOnly = prev.filter(s => !dbSet.has(`${s.talkSlug || ""}:${s.id}`));
             localOnly.forEach(s => {
-              const key = `${s.talkSlug || "unknown"}:${s.id}`;
+              const key = `${s.talkSlug || ""}:${s.id}`;
               fetch("/api/user/sentences", {
                 method: "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ sentenceKey: key, data: s }),
@@ -1484,7 +1484,7 @@ function WatchContent() {
               onRemoveSentence={id => {
                 const s = savedSentences.find(s => s.id === id);
                 if (user && s) {
-                  const key = `${s.talkSlug || "unknown"}:${s.id}`;
+                  const key = `${s.talkSlug || ""}:${s.id}`;
                   fetch("/api/user/sentences", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sentenceKey: key }) }).catch(() => {});
                 }
                 setSavedSentences(prev => {
