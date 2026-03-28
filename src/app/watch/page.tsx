@@ -605,6 +605,83 @@ function WatchContent() {
 
   }, [videoUrlParam, router]);
 
+  // ── DB sync: vocab + sentences (fires once when user logs in) ───────────
+  const syncedUserRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!user || syncedUserRef.current === user.email) return;
+    syncedUserRef.current = user.email;
+
+    (async () => {
+      try {
+        const [vRes, sRes] = await Promise.all([
+          fetch("/api/user/vocab"),
+          fetch("/api/user/sentences"),
+        ]);
+        if (vRes.ok) {
+          const { words: dbWords } = await vRes.json();
+          setVocabWords(prev => {
+            const dbSet = new Set(dbWords.map((w: any) => (typeof w === "object" && w !== null && "word" in w) ? w.word : String(w)));
+            const localOnly = prev.filter(w => !dbSet.has(w.word));
+            localOnly.forEach(w => {
+              fetch("/api/user/vocab", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ word: w.word, data: w }),
+              }).catch(() => {});
+            });
+            const merged = [...dbWords, ...localOnly];
+            localStorage.setItem("tedmaster_vocab", JSON.stringify(merged));
+            return merged;
+          });
+        }
+        if (sRes.ok) {
+          const { sentences: dbSentences } = await sRes.json();
+          setSavedSentences(prev => {
+            const dbSet = new Set(dbSentences.map((s: any) => `${s.talkSlug || ""}:${s.id}`));
+            const localOnly = prev.filter(s => !dbSet.has(`${s.talkSlug || ""}:${s.id}`));
+            localOnly.forEach(s => {
+              const key = `${s.talkSlug || "unknown"}:${s.id}`;
+              fetch("/api/user/sentences", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ sentenceKey: key, data: s }),
+              }).catch(() => {});
+            });
+            const merged = [...dbSentences, ...localOnly];
+            localStorage.setItem("tedmaster_sentences", JSON.stringify(merged));
+            return merged;
+          });
+        }
+      } catch (e) {
+        console.warn("[sync] DB vocab/sentences sync failed:", e);
+      }
+    })();
+  }, [user?.email]);
+
+  // ── DB sync: notes for current talk (fires when user + videoUrl ready) ──
+  const syncedNotesRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!user || !videoUrlParam) return;
+    const syncKey = `${user.email}:${videoUrlParam}`;
+    if (syncedNotesRef.current === syncKey) return;
+    syncedNotesRef.current = syncKey;
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/user/notes?key=${encodeURIComponent(videoUrlParam)}`);
+        if (!res.ok) return;
+        const { notes: dbNotes } = await res.json();
+        if (dbNotes && Object.keys(dbNotes).length > 0) {
+          setNotes(prev => {
+            const merged = { ...prev, ...dbNotes };
+            localStorage.setItem(`tm_notes_${videoUrlParam}`, JSON.stringify(merged));
+            return merged;
+          });
+        }
+      } catch (e) {
+        console.warn("[sync] DB notes sync failed:", e);
+      }
+    })();
+  }, [user?.email, videoUrlParam]);
+
   /* ── HLS setup ─────────────────────────────────────────────── */
   useEffect(() => {
     if (!data?.videoUrl || !videoRef.current) return;
@@ -715,34 +792,55 @@ function WatchContent() {
 
   const saveToVocab = (wordData: VocabItem) => {
     const talkSlug = data?.slug || slugFromUrl(videoUrlParam || "");
+    const item: VocabItem = { ...wordData, addedAt: Date.now(), talkSlug };
     setVocabWords(prev => {
-      const newList = [...prev.filter(i => i.word !== wordData.word), { ...wordData, addedAt: Date.now(), talkSlug }];
+      const newList = [...prev.filter(i => i.word !== wordData.word), item];
       localStorage.setItem("tedmaster_vocab", JSON.stringify(newList));
       return newList;
     });
+    if (user) {
+      fetch("/api/user/vocab", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ word: item.word, data: item }),
+      }).catch(() => {});
+    }
     setActiveWord(null);
   };
 
   const saveSentence = (item: TranscriptItem, analysis: any) => {
     const talkSlug = data?.slug || slugFromUrl(videoUrlParam || "");
+    const sentence: SavedSentence = {
+      id: item.id,
+      english: item.english,
+      translated: item.translated,
+      analysis,
+      addedAt: Date.now(),
+      talkSlug,
+    };
     setSavedSentences(prev => {
-      const newList = [...prev.filter(i => i.id !== item.id), {
-        id: item.id,
-        english: item.english,
-        translated: item.translated,
-        analysis,
-        addedAt: Date.now(),
-        talkSlug,
-      }];
+      const newList = [...prev.filter(i => i.id !== item.id), sentence];
       localStorage.setItem("tedmaster_sentences", JSON.stringify(newList));
       return newList;
     });
+    if (user) {
+      const sentenceKey = `${talkSlug}:${item.id}`;
+      fetch("/api/user/sentences", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sentenceKey, data: sentence }),
+      }).catch(() => {});
+    }
   };
 
   const handleSaveNote = (id: number) => {
     setNotes(prev => {
       const newNotes = { ...prev, [id]: noteInput };
       localStorage.setItem(`tm_notes_${videoUrlParam}`, JSON.stringify(newNotes));
+      if (user && videoUrlParam) {
+        fetch("/api/user/notes", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ talkKey: videoUrlParam, notes: newNotes }),
+        }).catch(() => {});
+      }
       return newNotes;
     });
     setEditingNoteId(null);
@@ -1370,16 +1468,26 @@ function WatchContent() {
               words={vocabWords}
               sentences={savedSentences}
               notes={notes}
-              onRemoveWord={w => setVocabWords(prev => { 
-                const next = prev.filter(i => i.word !== w); 
-                localStorage.setItem("tedmaster_vocab", JSON.stringify(next)); 
-                return next; 
-              })}
-              onRemoveSentence={id => setSavedSentences(prev => {
-                const next = prev.filter(i => i.id !== id);
-                localStorage.setItem("tedmaster_sentences", JSON.stringify(next));
-                return next;
-              })}
+              onRemoveWord={w => {
+                if (user) fetch("/api/user/vocab", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ word: w }) }).catch(() => {});
+                setVocabWords(prev => {
+                  const next = prev.filter(i => i.word !== w);
+                  localStorage.setItem("tedmaster_vocab", JSON.stringify(next));
+                  return next;
+                });
+              }}
+              onRemoveSentence={id => {
+                const s = savedSentences.find(s => s.id === id);
+                if (user && s) {
+                  const key = `${s.talkSlug || "unknown"}:${s.id}`;
+                  fetch("/api/user/sentences", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sentenceKey: key }) }).catch(() => {});
+                }
+                setSavedSentences(prev => {
+                  const next = prev.filter(i => i.id !== id);
+                  localStorage.setItem("tedmaster_sentences", JSON.stringify(next));
+                  return next;
+                });
+              }}
               onSelectWord={word => { videoRef.current?.pause(); setIsPlaying(false); setActiveWord(word); }}
               onSelectSentence={sent => {
                 if (videoRef.current) {
